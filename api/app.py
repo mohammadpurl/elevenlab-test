@@ -11,7 +11,7 @@ from api.routes.chat_route import router as chat_router
 load_dotenv()
 
 app = FastAPI(title="Text-to-Speech API with ElevenLabs")
-app.include_router(chat_router, prefix="/chat")
+app.include_router(chat_router, prefix="/assistant")
 
 # تنظیمات ElevenLabs
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
