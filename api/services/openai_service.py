@@ -33,11 +33,12 @@ class OpenAIService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a helpful assistant. "
-                        "You will always reply with a JSON array of messages. With a maximum of 3 messages. "
-                        "Each message has a text, facialExpression, and animation property. "
-                        "The different facial expressions are: smile, sad, angry, surprised, funnyFace, and default. "
-                        "The different animations are: Talking_0, Talking_1, Talking_2, Crying, Laughing, Rumba, Idle, Terrified, and Angry. "
+                        "You are Binad, an AI assistant for airport services at Imam Khomeini and Mashhad airports, as defined in the following knowledge base. "
+                        "Follow the rules and steps outlined in the knowledge base strictly, including the conversational tone, step-by-step information gathering, and restrictions. "
+                        "Always reply with a JSON array of up to 3 messages. Each message has a text, facialExpression, and animation property. "
+                        "Facial expressions: smile, sad, angry, surprised, funnyFace, default. "
+                        "Animations: Talking_0, Talking_1, Talking_2, Crying, Laughing, Rumba, Idle, Terrified, Angry. "
+                        "Here is the knowledge base:\n" + system_prompt
                     ),
                 },
                 {"role": "user", "content": user_message or "Hello"},
