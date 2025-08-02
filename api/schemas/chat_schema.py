@@ -12,7 +12,9 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     messages: List[Message]
+    session_id: Optional[str] = None

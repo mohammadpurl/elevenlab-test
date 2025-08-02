@@ -40,11 +40,20 @@ def chat(request: ChatRequest):
         raise HTTPException(status_code=401, detail="OpenAI API key is not set")
 
     try:
-        # گرفتن پیام‌ها از OpenAI
+        # گرفتن پیام‌ها از OpenAI با session_id
         logger.info("Getting response from OpenAI")
-        openai_messages: list = openai_service.get_girlfriend_response(request.message)
-        logger.info(f"OpenAI returned {len(openai_messages)} messages")
-        return ChatResponse(messages=openai_messages)
+        session_id = getattr(request, "session_id", None)
+        openai_messages, session_id = openai_service.get_girlfriend_response(
+            request.message, session_id if session_id else None
+        )
+        logger.info(
+            f"OpenAI returned {len(openai_messages)} messages for session: {session_id}"
+        )
+
+        # اضافه کردن session_id به پاسخ
+        response = ChatResponse(messages=openai_messages)
+        response.session_id = session_id
+        return response
 
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
@@ -55,3 +64,27 @@ def chat(request: ChatRequest):
 def health():
     logger.info("Health endpoint called")
     return {"status": "ok", "message": "Backend is running!"}
+
+
+@router.get("/memory/{session_id}")
+def get_memory(session_id: str):
+    """Get conversation history for a session"""
+    try:
+        openai_service = OpenAIService()
+        history = openai_service.get_conversation_history(session_id)
+        return {"session_id": session_id, "history": history}
+    except Exception as e:
+        logger.error(f"Error getting memory: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting memory: {str(e)}")
+
+
+@router.delete("/memory/{session_id}")
+def clear_memory(session_id: str):
+    """Clear conversation history for a session"""
+    try:
+        openai_service = OpenAIService()
+        openai_service.clear_memory(session_id)
+        return {"message": f"Memory cleared for session: {session_id}"}
+    except Exception as e:
+        logger.error(f"Error clearing memory: {e}")
+        raise HTTPException(status_code=500, detail=f"Error clearing memory: {str(e)}")
