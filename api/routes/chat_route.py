@@ -43,7 +43,7 @@ def chat(request: ChatRequest):
         # گرفتن پیام‌ها از OpenAI با session_id
         logger.info("Getting response from OpenAI")
         session_id = getattr(request, "session_id", None)
-        openai_messages, session_id = openai_service.get_girlfriend_response(
+        openai_messages, session_id = openai_service.get_assistant_response(
             request.message, session_id if session_id else None
         )
         logger.info(
@@ -72,7 +72,10 @@ def get_memory(session_id: str):
     try:
         openai_service = OpenAIService()
         history = openai_service.get_conversation_history(session_id)
-        return {"session_id": session_id, "history": history}
+        logger.info(
+            f"Memory endpoint called for session {session_id}, found {len(history)} messages"
+        )
+        return {"session_id": session_id, "history": history, "count": len(history)}
     except Exception as e:
         logger.error(f"Error getting memory: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting memory: {str(e)}")
