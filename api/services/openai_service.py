@@ -295,6 +295,48 @@ class AgentMemory:
             del self.conversations[session_id]
 
 
+class BookingState:
+    """Manages the state of the booking process for each session."""
+
+    def __init__(self):
+        self.current_step = 0
+        self.retry_count = 0
+        self.collected_data: Dict[str, str] = {
+            "origin_airport": "",
+            "travel_type": "",  # ورودی یا خروجی
+            "travel_date": "",
+            "passenger_count": "",
+            "passenger_name": "",
+            "national_id": "",
+            "flight_number": "",
+            "baggage_count": "",
+            "phone_number": "",
+        }
+
+    def get_next_question(self) -> tuple:
+        """Returns the next question key and step index."""
+        questions = [
+            "origin_airport",
+            "travel_type",
+            "travel_date",
+            "passenger_count",
+            "passenger_name",
+            "national_id",
+            "flight_number",
+            "baggage_count",
+            "phone_number",
+        ]
+        if self.current_step < len(questions):
+            return questions[self.current_step], self.current_step
+        return "completed", self.current_step
+
+    def update_state(self, key: str, value: str):
+        if key in self.collected_data:
+            self.collected_data[key] = value
+            self.current_step += 1
+            self.retry_count = 0
+
+
 class OpenAIService:
     _instance = None
     _memory = None
@@ -314,6 +356,7 @@ class OpenAIService:
 
             self.api_url = "https://api.openai.com/v1/chat/completions"
             self.memory = OpenAIService._memory
+            self.booking_states: Dict[str, BookingState] = {}
             self.initialized = True
 
     def get_assistant_response(
@@ -330,6 +373,11 @@ class OpenAIService:
 
         with open("api/constants/knowledge_base.txt", "r", encoding="utf-8") as f:
             knowledge_base = f.read()
+
+        # Initialize booking state for this session if not exists
+        if session_id not in self.booking_states:
+            self.booking_states[session_id] = BookingState()
+        booking_state = self.booking_states[session_id]
 
         system_prompt = f"""
 تو یک دستیار هوش مصنوعی به نام «بیناد» هستی که خدمات فرودگاهی در فرودگاه امام خمینی و مشهد را ارائه می‌دهی.
@@ -356,6 +404,15 @@ class OpenAIService:
     }}
   ]
 }}
+
+ # وضعیت فعلی رزرو:
+ - state: {json.dumps(booking_state.collected_data, ensure_ascii=False)}
+ - next_question: {booking_state.get_next_question()}
+ - قوانین اعتبارسنجی ویژه:
+   - اگر کد ملی ۱۰ رقم نبود یا شامل حروف بود: فقط یک بار محترمانه تذکر بده
+   - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
+   - اگر شماره تماس ۱۱ رقم نبود یا شامل حروف بود: فقط یک بار تذکر بده
+   - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
 
 # دانش‌نامه:
 {knowledge_base}
@@ -403,6 +460,13 @@ class OpenAIService:
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
+                        # Apply deterministic booking logic
+                        messages = self._apply_booking_logic_and_maybe_override(
+                            user_message=user_message,
+                            session_id=session_id,
+                            booking_state=booking_state,
+                            messages=messages,
+                        )
                         return messages, session_id
                     else:
                         raise ValueError("Messages array is empty or invalid")
@@ -415,7 +479,14 @@ class OpenAIService:
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
-                        return response_data, session_id
+                        messages_list = response_data
+                        messages_list = self._apply_booking_logic_and_maybe_override(
+                            user_message=user_message,
+                            session_id=session_id,
+                            booking_state=booking_state,
+                            messages=messages_list,
+                        )
+                        return messages_list, session_id
                     else:
                         raise ValueError("Response array is empty")
 
@@ -452,8 +523,129 @@ class OpenAIService:
 
     def clear_memory(self, session_id: str = "default"):
         self.memory.clear_conversation(session_id)
+        # Also reset booking state if exists
+        try:
+            if hasattr(self, "booking_states") and session_id in self.booking_states:
+                del self.booking_states[session_id]
+        except Exception:
+            pass
 
     def get_conversation_history(self, session_id: str = "default") -> List[Dict]:
         history = self.memory.get_conversation_history(session_id)
         logger.info(f"Retrieved {len(history)} messages for session {session_id}")
         return history
+
+    # ---------------- Internal helpers ----------------
+    @staticmethod
+    def _validate_national_id(national_id: str) -> bool:
+        cleaned = national_id.replace(" ", "")
+        return cleaned.isdigit() and len(cleaned) == 10
+
+    @staticmethod
+    def _validate_phone_number(phone: str) -> bool:
+        cleaned = phone.replace(" ", "")
+        return cleaned.isdigit() and len(cleaned) == 11
+
+    def _apply_booking_logic_and_maybe_override(
+        self,
+        user_message: str,
+        session_id: str,
+        booking_state: BookingState,
+        messages: List[Dict],
+    ) -> List[Dict]:
+        """Apply deterministic validation and step progression for ID/phone.
+
+        If invalid entry is provided twice, proceed to the next step while informing the user.
+        """
+        current_key, _ = booking_state.get_next_question()
+
+        # Only handle known steps deterministically
+        if current_key in ("national_id", "phone_number"):
+            cleaned_input = user_message.replace(" ", "")
+            is_valid = (
+                self._validate_national_id(cleaned_input)
+                if current_key == "national_id"
+                else self._validate_phone_number(cleaned_input)
+            )
+
+            if not is_valid:
+                if booking_state.retry_count == 0:
+                    # First invalid attempt: ask for correction, do not advance
+                    booking_state.retry_count = 1
+                    correction_text = (
+                        "لطفاً کد ملی رو با ۱۰ رقم و فقط عدد وارد کن."
+                        if current_key == "national_id"
+                        else "لطفاً شماره تماس رو با ۱۱ رقم و فقط عدد وارد کن (فاصله بین اعداد مشکلی نداره)."
+                    )
+                    return [
+                        {
+                            "text": correction_text,
+                            "facialExpression": "default",
+                            "animation": "Talking_0",
+                        }
+                    ]
+                else:
+                    # Second invalid attempt: inform and advance to next step
+                    booking_state.current_step += 1
+                    booking_state.retry_count = 0
+                    skip_text = (
+                        "اشکالی نداره، می‌تونی کد ملی رو در فرم نهایی اصلاح کنی."
+                        if current_key == "national_id"
+                        else "اشکالی نداره، می‌تونی شماره تماس رو در فرم نهایی اصلاح کنی."
+                    )
+                    next_key, _ = booking_state.get_next_question()
+                    next_question_text = self._get_question_text_for_key(next_key)
+                    return [
+                        {
+                            "text": skip_text,
+                            "facialExpression": "smile",
+                            "animation": "Talking_1",
+                        },
+                        {
+                            "text": next_question_text,
+                            "facialExpression": "default",
+                            "animation": "Talking_0",
+                        },
+                    ]
+            else:
+                # Valid input: save and go next
+                booking_state.update_state(current_key, cleaned_input)
+
+        elif current_key != "completed":
+            # Save generic input for other steps and move forward
+            booking_state.update_state(current_key, user_message)
+
+        # Special transfer message if origin_airport is Imam Khomeini
+        try:
+            if booking_state.collected_data.get("origin_airport") in [
+                "امام خمینی",
+                "امام خميني",
+                "Imam Khomeini",
+            ]:
+                messages.append(
+                    {
+                        "text": "راستی اگه الان فرودگاه امام خمینی هستی می‌تونم هماهنگ کنم بچه‌های ترنسفر درب خروجی سوارت کنند و ترنسفرت رو مهمون من باشی، نظرت چیه دوست من؟",
+                        "facialExpression": "smile",
+                        "animation": "Talking_2",
+                    }
+                )
+        except Exception:
+            pass
+
+        return messages
+
+    @staticmethod
+    def _get_question_text_for_key(key: str) -> str:
+        mapping: Dict[str, str] = {
+            "origin_airport": "نام فرودگاه مبدا رو بفرمایید.",
+            "travel_type": "پروازتون ورودی به فرودگاهه یا خروجی؟",
+            "travel_date": "تاریخ سفر رو بفرمایید.",
+            "passenger_count": "تعداد مسافران رو لطفاً بفرمایید.",
+            "passenger_name": "نام و نام خانوادگی مسافر رو بفرمایید.",
+            "national_id": "کد ملی مسافر رو بفرمایید.",
+            "flight_number": "شماره پرواز رو بفرمایید.",
+            "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
+            "phone_number": "شماره تماس رو بفرمایید.",
+            "completed": "همه اطلاعات دریافت شد. در پایان پیام تایید و کیوآرکد نمایش داده خواهد شد.",
+        }
+        return mapping.get(key, "")
