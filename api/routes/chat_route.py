@@ -4,7 +4,6 @@ from api.schemas.chat_schema import ChatRequest, ChatResponse, Message
 from api.services.openai_service import OpenAIService
 import os
 import logging
-import tempfile
 
 # تنظیم لاگر
 logging.basicConfig(level=logging.INFO)
@@ -47,7 +46,7 @@ def chat(request: ChatRequest):
             request.message, session_id if session_id else None
         )
         logger.info(
-            f"OpenAI returned {len(openai_messages)} messages for session: {session_id}"
+            f"[OpenAI] returned {len(openai_messages)} messages for session: {session_id}"
         )
 
         # اضافه کردن session_id به پاسخ
