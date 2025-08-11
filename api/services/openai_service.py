@@ -340,19 +340,22 @@ class OpenAIService:
 
 - پاسخ‌ها باید مرحله‌به‌مرحله، با لحن محاوره‌ای، مهربان و حداکثر ۳ جمله‌ای باشن
 - اگر اطلاعاتی ناقص بود، فقط یک بار با احترام تکرارش کن
-- هر پاسخ باید با فرمت JSON شامل حداکثر ۳ پیام باشه. هر پیام شامل:
-  - text
-  - facialExpression (یکی از: smile, sad, angry, surprised, funnyFace, default)
-  - animation (یکی از: Talking_0, Talking_1, Talking_2, Crying, Laughing, Rumba, Idle, Terrified, Angry)
+- **مهم**: حتماً پاسخ را با فرمت JSON صحیح ارائه بده
+- هر پاسخ باید شامل آرایه‌ای از حداکثر ۳ پیام باشه. هر پیام شامل:
+  - text: متن پیام
+  - facialExpression: یکی از (smile, sad, angry, surprised, funnyFace, default)
+  - animation: یکی از (Talking_0, Talking_1, Talking_2, Crying, Laughing, Rumba, Idle, Terrified, Angry)
 
-# مثال پاسخ:
-[
-  {{
-    "text": "سلام، به فرودگاه امام خوش اومدی!",
-    "facialExpression": "smile",
-    "animation": "Talking_0"
-  }}
-]
+# فرمت پاسخ اجباری:
+{{
+  "messages": [
+    {{
+      "text": "سلام، به فرودگاه امام خوش اومدی!",
+      "facialExpression": "smile",
+      "animation": "Talking_0"
+    }}
+  ]
+}}
 
 # دانش‌نامه:
 {knowledge_base}
@@ -367,6 +370,7 @@ class OpenAIService:
             "model": "gpt-4o",
             "max_tokens": 1500,
             "temperature": 0.6,
+            "response_format": {"type": "json_object"},
             "messages": messages,
         }
 
@@ -388,29 +392,56 @@ class OpenAIService:
 
             try:
                 response_data = json.loads(content)
-                if isinstance(response_data, dict) and "messages" in response_data:
-                    for msg in response_data["messages"]:
-                        self.memory.add_message(session_id, "assistant", msg["text"])
-                    return response_data["messages"], session_id
+                logger.info(f"Parsed response data: {type(response_data)}")
 
+                # اگر پاسخ شامل کلید "messages" باشد
+                if isinstance(response_data, dict) and "messages" in response_data:
+                    messages = response_data["messages"]
+                    if isinstance(messages, list) and len(messages) > 0:
+                        for msg in messages:
+                            if "text" in msg:
+                                self.memory.add_message(
+                                    session_id, "assistant", msg["text"]
+                                )
+                        return messages, session_id
+                    else:
+                        raise ValueError("Messages array is empty or invalid")
+
+                # اگر پاسخ مستقیماً آرایه باشد
                 elif isinstance(response_data, list):
-                    for msg in response_data:
-                        if "text" in msg:
-                            self.memory.add_message(
-                                session_id, "assistant", msg["text"]
-                            )
-                    return response_data, session_id
+                    if len(response_data) > 0:
+                        for msg in response_data:
+                            if "text" in msg:
+                                self.memory.add_message(
+                                    session_id, "assistant", msg["text"]
+                                )
+                        return response_data, session_id
+                    else:
+                        raise ValueError("Response array is empty")
 
                 else:
-                    raise ValueError("Unexpected format in response")
+                    raise ValueError(
+                        f"Unexpected response format: {type(response_data)}"
+                    )
 
-            except json.JSONDecodeError:
-                logger.warning("OpenAI response is not valid JSON. Saving raw content.")
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {e}")
+                logger.warning(f"Raw response content: {content[:200]}...")
                 self.memory.add_message(session_id, "assistant", content)
                 return [
                     {
-                        "text": content,
-                        "facialExpression": "default",
+                        "text": "متأسفانه مشکلی در پردازش پاسخ پیش آمد. لطفاً دوباره تلاش کنید.",
+                        "facialExpression": "sad",
+                        "animation": "Idle",
+                    }
+                ], session_id
+            except Exception as e:
+                logger.error(f"Error processing response: {e}")
+                self.memory.add_message(session_id, "assistant", str(e))
+                return [
+                    {
+                        "text": "خطایی در پردازش پاسخ رخ داد. لطفاً دوباره تلاش کنید.",
+                        "facialExpression": "sad",
                         "animation": "Idle",
                     }
                 ], session_id
