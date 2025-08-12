@@ -374,7 +374,7 @@ class OpenAIService:
         with open("api/constants/knowledge_base.txt", "r", encoding="utf-8") as f:
             knowledge_base = f.read()
 
-        # Initialize booking state for this session if not exists
+            # Initialize booking state for this session if not exists
         if session_id not in self.booking_states:
             self.booking_states[session_id] = BookingState()
         booking_state = self.booking_states[session_id]
@@ -405,14 +405,22 @@ class OpenAIService:
   ]
 }}
 
- # وضعیت فعلی رزرو:
- - state: {json.dumps(booking_state.collected_data, ensure_ascii=False)}
- - next_question: {booking_state.get_next_question()}
- - قوانین اعتبارسنجی ویژه:
-   - اگر کد ملی ۱۰ رقم نبود یا شامل حروف بود: فقط یک بار محترمانه تذکر بده
-   - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
-   - اگر شماره تماس ۱۱ رقم نبود یا شامل حروف بود: فقط یک بار تذکر بده
-   - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
+# وضعیت فعلی رزرو:
+- state: {json.dumps(booking_state.collected_data, ensure_ascii=False)}
+- next_question: {booking_state.get_next_question()}
+- قوانین اعتبارسنجی ویژه:
+  - اگر کد ملی ۱۰ رقم نبود یا شامل حروف بود: فقط یک بار محترمانه تذکر بده
+  - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
+  - اگر شماره تماس ۱۱ رقم نبود یا شامل حروف بود: فقط یک بار تذکر بده
+  - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
+
+# متن دقیق سوالات (حتماً استفاده کن):
+- تعداد مسافران: "تعداد دقیق مسافران چند نفر است؟"
+- نام مسافر: "نام و نام خانوادگی مسافر رو بفرمایید."
+- کد ملی: "کد ملی مسافر رو بفرمایید."
+- شماره پرواز: "شماره پرواز رو بفرمایید."
+- تعداد چمدان: "تعداد چمدان‌ها رو بفرمایید."
+- شماره تماس: "شماره تماس رو بفرمایید."
 
 # دانش‌نامه:
 {knowledge_base}
@@ -558,6 +566,9 @@ class OpenAIService:
         If invalid entry is provided twice, proceed to the next step while informing the user.
         """
         current_key, _ = booking_state.get_next_question()
+        logger.info(
+            f"Current booking step: {current_key}, retry count: {booking_state.retry_count}"
+        )
 
         # Only handle known steps deterministically
         if current_key in ("national_id", "phone_number"):
@@ -567,11 +578,15 @@ class OpenAIService:
                 if current_key == "national_id"
                 else self._validate_phone_number(cleaned_input)
             )
+            logger.info(f"Validation result for {current_key}: {is_valid}")
 
             if not is_valid:
                 if booking_state.retry_count == 0:
                     # First invalid attempt: ask for correction, do not advance
                     booking_state.retry_count = 1
+                    logger.info(
+                        f"First invalid attempt for {current_key}, asking for correction"
+                    )
                     correction_text = (
                         "لطفاً کد ملی رو با ۱۰ رقم و فقط عدد وارد کن."
                         if current_key == "national_id"
@@ -586,6 +601,9 @@ class OpenAIService:
                     ]
                 else:
                     # Second invalid attempt: inform and advance to next step
+                    logger.info(
+                        f"Second invalid attempt for {current_key}, advancing to next step"
+                    )
                     booking_state.current_step += 1
                     booking_state.retry_count = 0
                     skip_text = (
@@ -595,6 +613,9 @@ class OpenAIService:
                     )
                     next_key, _ = booking_state.get_next_question()
                     next_question_text = self._get_question_text_for_key(next_key)
+                    logger.info(
+                        f"Moving to next question: {next_key} - {next_question_text}"
+                    )
                     return [
                         {
                             "text": skip_text,
@@ -609,15 +630,22 @@ class OpenAIService:
                     ]
             else:
                 # Valid input: save and go next
+                logger.info(
+                    f"Valid input for {current_key}, updating state and moving to next step"
+                )
                 booking_state.update_state(current_key, cleaned_input)
 
         elif current_key != "completed":
             # Save generic input for other steps and move forward
+            logger.info(f"Processing generic input for {current_key}")
             booking_state.update_state(current_key, user_message)
 
         # Special transfer message if origin_airport is Imam Khomeini
+        # Only show this message when all steps are completed
         try:
-            if booking_state.collected_data.get("origin_airport") in [
+            if current_key == "completed" and booking_state.collected_data.get(
+                "origin_airport"
+            ) in [
                 "امام خمینی",
                 "امام خميني",
                 "Imam Khomeini",
@@ -640,12 +668,12 @@ class OpenAIService:
             "origin_airport": "نام فرودگاه مبدا رو بفرمایید.",
             "travel_type": "پروازتون ورودی به فرودگاهه یا خروجی؟",
             "travel_date": "تاریخ سفر رو بفرمایید.",
-            "passenger_count": "تعداد مسافران رو لطفاً بفرمایید.",
+            "passenger_count": "تعداد دقیق مسافران چند نفر است؟",
             "passenger_name": "نام و نام خانوادگی مسافر رو بفرمایید.",
             "national_id": "کد ملی مسافر رو بفرمایید.",
             "flight_number": "شماره پرواز رو بفرمایید.",
             "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
             "phone_number": "شماره تماس رو بفرمایید.",
-            "completed": "همه اطلاعات دریافت شد. در پایان پیام تایید و کیوآرکد نمایش داده خواهد شد.",
+            "completed": "همه اطلاعات دریافت شد! حالا پیام تایید نهایی و کیوآرکد برای پرداخت نمایش داده خواهد شد.",
         }
         return mapping.get(key, "")
