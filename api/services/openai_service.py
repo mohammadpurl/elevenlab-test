@@ -634,6 +634,17 @@ class OpenAIService:
                     f"Valid input for {current_key}, updating state and moving to next step"
                 )
                 booking_state.update_state(current_key, cleaned_input)
+                # After updating state, get the next question
+                next_key, _ = booking_state.get_next_question()
+                if next_key != "completed":
+                    next_question_text = self._get_question_text_for_key(next_key)
+                    return [
+                        {
+                            "text": next_question_text,
+                            "facialExpression": "default",
+                            "animation": "Talking_0",
+                        }
+                    ]
 
         elif current_key != "completed":
             # Save generic input for other steps and move forward
