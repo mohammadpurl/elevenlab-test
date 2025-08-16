@@ -624,7 +624,7 @@ class OpenAIService:
         if current_key == "completed":
             messages.append(
                 {
-                    "text": "از طریق QRCode می‌توانی اطلاعات را در فرم ببینی و آن را اصلاح کنی.",
+                    "text": "از طریق کییو آر کد می‌توانی اطلاعات را در فرم ببینی و آن را اصلاح کنی.",
                     "facialExpression": "smile",
                     "animation": "Talking_1",
                 }
@@ -644,6 +644,6 @@ class OpenAIService:
             "flight_number": "شماره پرواز رو بفرمایید.",
             "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
             "phone_number": "شماره تماس رو بفرمایید.",
-            "completed": "عالی! همه اطلاعات شما دریافت شد. حالا می‌توانید از طریق QRCode اطلاعات را مشاهده و در صورت نیاز اصلاح کنید.",
+            "completed": "عالی! همه اطلاعات شما دریافت شد. حالا می‌توانید از طریق کییو آر کد اطلاعات را مشاهده و در صورت نیاز اصلاح کنید.",
         }
         return mapping.get(key, "")
