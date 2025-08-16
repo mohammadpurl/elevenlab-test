@@ -360,7 +360,7 @@ class OpenAIService:
             self.initialized = True
 
     def get_assistant_response(
-        self, user_message: str, session_id: Optional[str] = None
+        self, user_message: str, session_id: Optional[str] = None, language: str = "fa"
     ):
         if session_id is None:
             session_id = str(uuid.uuid4())
@@ -371,7 +371,13 @@ class OpenAIService:
             "Content-Type": "application/json",
         }
 
-        with open("api/constants/knowledge_base.txt", "r", encoding="utf-8") as f:
+        # Load knowledge base based on language
+        knowledge_base_file = (
+            "api/constants/knowledge_base_en.txt"
+            if language == "en"
+            else "api/constants/knowledge_base.txt"
+        )
+        with open(knowledge_base_file, "r", encoding="utf-8") as f:
             knowledge_base = f.read()
 
             # Initialize booking state for this session if not exists
@@ -379,7 +385,51 @@ class OpenAIService:
             self.booking_states[session_id] = BookingState()
         booking_state = self.booking_states[session_id]
 
-        system_prompt = f"""
+        # Create language-specific system prompt
+        if language == "en":
+            system_prompt = f"""
+You are an AI assistant named "Binad" who provides airport services at Imam Khomeini and Mashhad airports.
+
+# Important Rules:
+- Always stay in character, only talk about topics defined in the knowledge base
+- Ask only one question at a time and never ask messages unrelated to the question
+
+- Responses should be step-by-step, with conversational, friendly tone and maximum 3 sentences
+- If information is incomplete, respectfully repeat it only once
+- **Important**: Always provide the response in correct JSON format
+- Each response should include an array of maximum 3 messages. Each message includes:
+  - text: message text
+  - facialExpression: one of (smile, sad, angry, surprised, funnyFace, default)
+  - animation: one of (Talking_0, Talking_1, Talking_2, Crying, Laughing, Rumba, Idle, Terrified, Angry)
+
+# Required Response Format:
+{{
+  "messages": [
+    {{
+      "text": "Hello, welcome to Imam Airport!",
+      "facialExpression": "smile",
+      "animation": "Talking_0"
+    }}
+  ]
+}}
+
+# Current Booking State:
+- state: {json.dumps(booking_state.collected_data, ensure_ascii=False)}
+- next_question: {booking_state.get_next_question()}
+
+# Exact Question Texts (must use):
+- Number of passengers: "What is the exact number of passengers?"
+- Passenger name: "Please provide the passenger's full name."
+- National ID: "Please provide the passenger's national ID."
+- Flight number: "Please provide the flight number."
+- Number of bags: "Please provide the number of bags."
+- Contact number: "Please provide the contact number."
+
+# Knowledge Base:
+{knowledge_base}
+            """
+        else:
+            system_prompt = f"""
 تو یک دستیار هوش مصنوعی به نام «بیناد» هستی که خدمات فرودگاهی در فرودگاه امام خمینی و مشهد را ارائه می‌دهی.
 
 # قوانین مهم:
@@ -419,7 +469,7 @@ class OpenAIService:
 
 # دانش‌نامه:
 {knowledge_base}
-        """
+            """
 
         # ساخت پیام‌ها
         messages = [{"role": "system", "content": system_prompt}]
@@ -458,7 +508,7 @@ class OpenAIService:
                 # If this is a new session (no conversation history) and we're at the first step
                 if len(conversation_history) == 0 and current_key == "origin_airport":
                     first_question_text = self._get_question_text_for_key(
-                        "origin_airport"
+                        "origin_airport", language
                     )
                     # ذخیره پیام‌ها در حافظه
                     self.memory.add_message(session_id, "user", user_message)
@@ -491,6 +541,7 @@ class OpenAIService:
                             session_id=session_id,
                             booking_state=booking_state,
                             messages=messages,
+                            language=language,
                         )
                         return messages, session_id
                     else:
@@ -510,6 +561,7 @@ class OpenAIService:
                             session_id=session_id,
                             booking_state=booking_state,
                             messages=messages_list,
+                            language=language,
                         )
                         return messages_list, session_id
                     else:
@@ -524,9 +576,14 @@ class OpenAIService:
                 logger.error(f"JSON decode error: {e}")
                 logger.warning(f"Raw response content: {content[:200]}...")
                 self.memory.add_message(session_id, "assistant", content)
+                error_message = (
+                    "Unfortunately, there was a problem processing the response. Please try again."
+                    if language == "en"
+                    else "متأسفانه مشکلی در پردازش پاسخ پیش آمد. لطفاً دوباره تلاش کنید."
+                )
                 return [
                     {
-                        "text": "متأسفانه مشکلی در پردازش پاسخ پیش آمد. لطفاً دوباره تلاش کنید.",
+                        "text": error_message,
                         "facialExpression": "sad",
                         "animation": "Idle",
                     }
@@ -534,9 +591,14 @@ class OpenAIService:
             except Exception as e:
                 logger.error(f"Error processing response: {e}")
                 self.memory.add_message(session_id, "assistant", str(e))
+                error_message = (
+                    "An error occurred while processing the response. Please try again."
+                    if language == "en"
+                    else "خطایی در پردازش پاسخ رخ داد. لطفاً دوباره تلاش کنید."
+                )
                 return [
                     {
-                        "text": "خطایی در پردازش پاسخ رخ داد. لطفاً دوباره تلاش کنید.",
+                        "text": error_message,
                         "facialExpression": "sad",
                         "animation": "Idle",
                     }
@@ -568,6 +630,7 @@ class OpenAIService:
         session_id: str,
         booking_state: BookingState,
         messages: List[Dict],
+        language: str = "fa",
     ) -> List[Dict]:
         """Apply step progression without validation for any input."""
         current_key, _ = booking_state.get_next_question()
@@ -581,7 +644,7 @@ class OpenAIService:
             # Get the next question
             next_key, _ = booking_state.get_next_question()
             if next_key != "completed":
-                next_question_text = self._get_question_text_for_key(next_key)
+                next_question_text = self._get_question_text_for_key(next_key, language)
                 return [
                     {
                         "text": next_question_text,
@@ -591,7 +654,9 @@ class OpenAIService:
                 ]
             else:
                 # All questions completed - show completion message
-                completion_message = self._get_question_text_for_key("completed")
+                completion_message = self._get_question_text_for_key(
+                    "completed", language
+                )
                 return [
                     {
                         "text": completion_message,
@@ -610,9 +675,14 @@ class OpenAIService:
                 "امام خميني",
                 "Imam Khomeini",
             ]:
+                transfer_message = (
+                    "By the way, if you're currently at Imam Khomeini Airport, I can arrange for the transfer team to pick you up at the exit door and your transfer will be my treat, what do you think my friend?"
+                    if language == "en"
+                    else "راستی اگه الان فرودگاه امام خمینی هستی می‌تونم هماهنگ کنم بچه‌های ترنسفر درب خروجی سوارت کنند و ترنسفرت رو مهمون من باشی، نظرت چیه دوست من؟"
+                )
                 messages.append(
                     {
-                        "text": "راستی اگه الان فرودگاه امام خمینی هستی می‌تونم هماهنگ کنم بچه‌های ترنسفر درب خروجی سوارت کنند و ترنسفرت رو مهمون من باشی، نظرت چیه دوست من؟",
+                        "text": transfer_message,
                         "facialExpression": "smile",
                         "animation": "Talking_2",
                     }
@@ -622,9 +692,14 @@ class OpenAIService:
 
         # Add final QR code message when conversation is completed
         if current_key == "completed":
+            qr_message = (
+                "You can view and modify the information in the form through the QR code."
+                if language == "en"
+                else "از طریق کیو آر کد می‌توانی اطلاعات را در فرم ببینی و آن را اصلاح کنی."
+            )
             messages.append(
                 {
-                    "text": "از طریق کیو آر کد می‌توانی اطلاعات را در فرم ببینی و آن را اصلاح کنی.",
+                    "text": qr_message,
                     "facialExpression": "smile",
                     "animation": "Talking_1",
                 }
@@ -633,17 +708,32 @@ class OpenAIService:
         return messages
 
     @staticmethod
-    def _get_question_text_for_key(key: str) -> str:
-        mapping: Dict[str, str] = {
-            "origin_airport": "نام فرودگاه مبدا رو بفرمایید.",
-            "travel_type": "پروازتون ورودی به فرودگاهه یا خروجی؟",
-            "travel_date": "تاریخ سفر رو بفرمایید.",
-            "passenger_count": "تعداد دقیق مسافران چند نفر است؟",
-            "passenger_name": "نام و نام خانوادگی مسافر رو بفرمایید.",
-            "national_id": "کد ملی مسافر رو بفرمایید.",
-            "flight_number": "شماره پرواز رو بفرمایید.",
-            "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
-            "phone_number": "شماره تماس رو بفرمایید.",
-            "completed": "عالی! همه اطلاعات شما دریافت شد. حالا می‌توانید از طریق کیو آر کد اطلاعات را مشاهده و در صورت نیاز اصلاح کنید.",
-        }
-        return mapping.get(key, "")
+    def _get_question_text_for_key(key: str, language: str = "fa") -> str:
+        if language == "en":
+            en_mapping: Dict[str, str] = {
+                "origin_airport": "Please provide the origin airport name.",
+                "travel_type": "Is your flight arriving at the airport or departing?",
+                "travel_date": "Please provide the travel date.",
+                "passenger_count": "What is the exact number of passengers?",
+                "passenger_name": "Please provide the passenger's full name.",
+                "national_id": "Please provide the passenger's national ID.",
+                "flight_number": "Please provide the flight number.",
+                "baggage_count": "Please provide the number of bags.",
+                "phone_number": "Please provide the contact number.",
+                "completed": "Excellent! All your information has been received. You can now view and modify the information through the QR code if needed.",
+            }
+            return en_mapping.get(key, "")
+        else:
+            fa_mapping: Dict[str, str] = {
+                "origin_airport": "نام فرودگاه مبدا رو بفرمایید.",
+                "travel_type": "پروازتون ورودی به فرودگاهه یا خروجی؟",
+                "travel_date": "تاریخ سفر رو بفرمایید.",
+                "passenger_count": "تعداد دقیق مسافران چند نفر است؟",
+                "passenger_name": "نام و نام خانوادگی مسافر رو بفرمایید.",
+                "national_id": "کد ملی مسافر رو بفرمایید.",
+                "flight_number": "شماره پرواز رو بفرمایید.",
+                "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
+                "phone_number": "شماره تماس رو بفرمایید.",
+                "completed": "عالی! همه اطلاعات شما دریافت شد. حالا می‌توانید از طریق کیو آر کد اطلاعات را مشاهده و در صورت نیاز اصلاح کنید.",
+            }
+            return fa_mapping.get(key, "")

@@ -42,8 +42,9 @@ def chat(request: ChatRequest):
         # گرفتن پیام‌ها از OpenAI با session_id
         logger.info("Getting response from OpenAI")
         session_id = getattr(request, "session_id", None)
+        language = getattr(request, "language", "fa")
         openai_messages, session_id = openai_service.get_assistant_response(
-            request.message, session_id if session_id else None
+            request.message, session_id if session_id else None, language
         )
         logger.info(
             f"[OpenAI] returned {len(openai_messages)} messages for session: {session_id}"
