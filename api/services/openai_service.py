@@ -454,6 +454,23 @@ class OpenAIService:
                 response_data = json.loads(content)
                 logger.info(f"Parsed response data: {type(response_data)}")
 
+                # Check if this is a new session and we need to ask the first question
+                conversation_history = self.memory.get_conversation_history(session_id)
+                current_key, _ = booking_state.get_next_question()
+
+                # If this is a new session (no conversation history) and we're at the first step
+                if len(conversation_history) == 0 and current_key == "origin_airport":
+                    first_question_text = self._get_question_text_for_key(
+                        "origin_airport"
+                    )
+                    return [
+                        {
+                            "text": first_question_text,
+                            "facialExpression": "default",
+                            "animation": "Talking_0",
+                        }
+                    ], session_id
+
                 # اگر پاسخ شامل کلید "messages" باشد
                 if isinstance(response_data, dict) and "messages" in response_data:
                     messages = response_data["messages"]
@@ -567,6 +584,16 @@ class OpenAIService:
                         "animation": "Talking_0",
                     }
                 ]
+            else:
+                # All questions completed - show completion message
+                completion_message = self._get_question_text_for_key("completed")
+                return [
+                    {
+                        "text": completion_message,
+                        "facialExpression": "smile",
+                        "animation": "Talking_1",
+                    }
+                ]
 
         # Special transfer message if origin_airport is Imam Khomeini
         # Only show this message when all steps are completed
@@ -612,6 +639,6 @@ class OpenAIService:
             "flight_number": "شماره پرواز رو بفرمایید.",
             "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
             "phone_number": "شماره تماس رو بفرمایید.",
-            "completed": "همه اطلاعات دریافت شد! حالا پیام تایید نهایی و کیوآرکد برای پرداخت نمایش داده خواهد شد.",
+            "completed": "عالی! همه اطلاعات شما دریافت شد. حالا می‌توانید از طریق QRCode اطلاعات را مشاهده و در صورت نیاز اصلاح کنید.",
         }
         return mapping.get(key, "")
