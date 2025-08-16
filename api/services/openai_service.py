@@ -447,9 +447,6 @@ class OpenAIService:
             content = response.json()["choices"][0]["message"]["content"]
             logger.info(f"OpenAI response received: {content[:100]}...")
 
-            # ذخیره پیام‌ها در حافظه
-            self.memory.add_message(session_id, "user", user_message)
-
             try:
                 response_data = json.loads(content)
                 logger.info(f"Parsed response data: {type(response_data)}")
@@ -463,6 +460,11 @@ class OpenAIService:
                     first_question_text = self._get_question_text_for_key(
                         "origin_airport"
                     )
+                    # ذخیره پیام‌ها در حافظه
+                    self.memory.add_message(session_id, "user", user_message)
+                    self.memory.add_message(
+                        session_id, "assistant", first_question_text
+                    )
                     return [
                         {
                             "text": first_question_text,
@@ -470,6 +472,9 @@ class OpenAIService:
                             "animation": "Talking_0",
                         }
                     ], session_id
+
+                # ذخیره پیام‌ها در حافظه
+                self.memory.add_message(session_id, "user", user_message)
 
                 # اگر پاسخ شامل کلید "messages" باشد
                 if isinstance(response_data, dict) and "messages" in response_data:
