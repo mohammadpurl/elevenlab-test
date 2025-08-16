@@ -408,11 +408,6 @@ class OpenAIService:
 # وضعیت فعلی رزرو:
 - state: {json.dumps(booking_state.collected_data, ensure_ascii=False)}
 - next_question: {booking_state.get_next_question()}
-- قوانین اعتبارسنجی ویژه:
-  - اگر کد ملی ۱۰ رقم نبود یا شامل حروف بود: فقط یک بار محترمانه تذکر بده
-  - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
-  - اگر شماره تماس ۱۱ رقم نبود یا شامل حروف بود: فقط یک بار تذکر بده
-  - اگر بار دوم هم اشتباه بود: بگو در فرم نهایی می‌تواند اصلاح کند و به مرحله بعد برو
 
 # متن دقیق سوالات (حتماً استفاده کن):
 - تعداد مسافران: "تعداد دقیق مسافران چند نفر است؟"
@@ -544,15 +539,6 @@ class OpenAIService:
         return history
 
     # ---------------- Internal helpers ----------------
-    @staticmethod
-    def _validate_national_id(national_id: str) -> bool:
-        cleaned = national_id.replace(" ", "")
-        return cleaned.isdigit() and len(cleaned) == 10
-
-    @staticmethod
-    def _validate_phone_number(phone: str) -> bool:
-        cleaned = phone.replace(" ", "")
-        return cleaned.isdigit() and len(cleaned) == 11
 
     def _apply_booking_logic_and_maybe_override(
         self,
@@ -561,95 +547,26 @@ class OpenAIService:
         booking_state: BookingState,
         messages: List[Dict],
     ) -> List[Dict]:
-        """Apply deterministic validation and step progression for ID/phone.
-
-        If invalid entry is provided twice, proceed to the next step while informing the user.
-        """
+        """Apply step progression without validation for any input."""
         current_key, _ = booking_state.get_next_question()
-        logger.info(
-            f"Current booking step: {current_key}, retry count: {booking_state.retry_count}"
-        )
+        logger.info(f"Current booking step: {current_key}")
 
-        # Only handle known steps deterministically
-        if current_key in ("national_id", "phone_number"):
-            cleaned_input = user_message.replace(" ", "")
-            is_valid = (
-                self._validate_national_id(cleaned_input)
-                if current_key == "national_id"
-                else self._validate_phone_number(cleaned_input)
-            )
-            logger.info(f"Validation result for {current_key}: {is_valid}")
-
-            if not is_valid:
-                if booking_state.retry_count == 0:
-                    # First invalid attempt: ask for correction, do not advance
-                    booking_state.retry_count = 1
-                    logger.info(
-                        f"First invalid attempt for {current_key}, asking for correction"
-                    )
-                    correction_text = (
-                        "لطفاً کد ملی رو با ۱۰ رقم و فقط عدد وارد کن."
-                        if current_key == "national_id"
-                        else "لطفاً شماره تماس رو با ۱۱ رقم و فقط عدد وارد کن (فاصله بین اعداد مشکلی نداره)."
-                    )
-                    return [
-                        {
-                            "text": correction_text,
-                            "facialExpression": "default",
-                            "animation": "Talking_0",
-                        }
-                    ]
-                else:
-                    # Second invalid attempt: inform and advance to next step
-                    logger.info(
-                        f"Second invalid attempt for {current_key}, advancing to next step"
-                    )
-                    booking_state.current_step += 1
-                    booking_state.retry_count = 0
-                    skip_text = (
-                        "اشکالی نداره، می‌تونی کد ملی رو در فرم نهایی اصلاح کنی."
-                        if current_key == "national_id"
-                        else "اشکالی نداره، می‌تونی شماره تماس رو در فرم نهایی اصلاح کنی."
-                    )
-                    next_key, _ = booking_state.get_next_question()
-                    next_question_text = self._get_question_text_for_key(next_key)
-                    logger.info(
-                        f"Moving to next question: {next_key} - {next_question_text}"
-                    )
-                    return [
-                        {
-                            "text": skip_text,
-                            "facialExpression": "smile",
-                            "animation": "Talking_1",
-                        },
-                        {
-                            "text": next_question_text,
-                            "facialExpression": "default",
-                            "animation": "Talking_0",
-                        },
-                    ]
-            else:
-                # Valid input: save and go next
-                logger.info(
-                    f"Valid input for {current_key}, updating state and moving to next step"
-                )
-                booking_state.update_state(current_key, cleaned_input)
-                # After updating state, get the next question
-                next_key, _ = booking_state.get_next_question()
-                if next_key != "completed":
-                    next_question_text = self._get_question_text_for_key(next_key)
-                    return [
-                        {
-                            "text": next_question_text,
-                            "facialExpression": "default",
-                            "animation": "Talking_0",
-                        }
-                    ]
-
-        elif current_key != "completed":
-            # Save generic input for other steps and move forward
-            logger.info(f"Processing generic input for {current_key}")
+        # Save input and move to next step for all questions
+        if current_key != "completed":
+            logger.info(f"Processing input for {current_key}")
             booking_state.update_state(current_key, user_message)
+
+            # Get the next question
+            next_key, _ = booking_state.get_next_question()
+            if next_key != "completed":
+                next_question_text = self._get_question_text_for_key(next_key)
+                return [
+                    {
+                        "text": next_question_text,
+                        "facialExpression": "default",
+                        "animation": "Talking_0",
+                    }
+                ]
 
         # Special transfer message if origin_airport is Imam Khomeini
         # Only show this message when all steps are completed
@@ -670,6 +587,16 @@ class OpenAIService:
                 )
         except Exception:
             pass
+
+        # Add final QR code message when conversation is completed
+        if current_key == "completed":
+            messages.append(
+                {
+                    "text": "از طریق QRCode می‌توانی اطلاعات را در فرم ببینی و آن را اصلاح کنی.",
+                    "facialExpression": "smile",
+                    "animation": "Talking_1",
+                }
+            )
 
         return messages
 
