@@ -4,9 +4,14 @@ from enum import Enum
 
 
 class Passenger(BaseModel):
-    fullName: str
+    name: str
+    lastName: str
     nationalId: str
+    flightNumber: str
+    passportNumber: str
     luggageCount: int
+    passengerType: str  # "adult" or "infant"
+    gender: str
 
 
 class MessageSender(str, Enum):
@@ -26,9 +31,11 @@ class ExtractInfoRequest(BaseModel):
 
 class ExtractInfoResponse(BaseModel):
     airportName: str
+    travelType: str  # "arrival" or "departure"
     travelDate: str
-    flightNumber: str
+    passengerCount: int
     passengers: List[Passenger]
+    additionalInfo: Optional[str] = None
 
 
 class MessageRequest(BaseModel):

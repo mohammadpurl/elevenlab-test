@@ -21,12 +21,24 @@ async def call_openai(messages: ExtractInfoRequest):
         "Return a JSON object with these fields:\n"
         "{\n"
         '  "airportName": string,\n'
+        '  "travelType": string (either "arrival" or "departure"),\n'
         '  "travelDate": string,\n'
-        '  "flightNumber": string,\n'
+        '  "passengerCount": number,\n'
         '  "passengers": [\n'
-        '    { "fullName": string, "nationalId": string, "luggageCount": number }\n'
-        "  ]\n"
+        "    {\n"
+        '      "name": string,\n'
+        '      "lastName": string,\n'
+        '      "nationalId": string,\n'
+        '      "flightNumber": string,\n'
+        '      "passportNumber": string,\n'
+        '      "luggageCount": number,\n'
+        '      "passengerType": string (either "adult" or "infant"),\n'
+        '      "gender": string\n'
+        "    }\n"
+        "  ],\n"
+        '  "additionalInfo": string (optional)\n'
         "}\n"
+        "Important: Extract information for each passenger separately. Each passenger should have their own complete set of information.\n"
         "If any field is missing, use an empty string or 0. Only return the JSON object, nothing else.\n\n"
         "Conversation:\n"
         + "\n".join(f"{m.sender}: {m.text}" for m in messages.messages)
@@ -43,7 +55,7 @@ async def call_openai(messages: ExtractInfoRequest):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a helpful assistant for airline ticket booking.",
+                "content": "You are an expert information extraction assistant for airline ticket bookings. Your task is to carefully analyze conversations and extract structured booking information including passenger details, flight information, and travel preferences. Be thorough and accurate in your extraction.",
             },
             {"role": "user", "content": prompt},
         ],

@@ -309,8 +309,11 @@ class BookingState:
             "passenger_name": "",
             "national_id": "",
             "flight_number": "",
+            "passport_number": "",
             "baggage_count": "",
-            "phone_number": "",
+            "passenger_type": "",  # بزرگسال یا نوزاد
+            "gender": "",  # جنسیت
+            "additional_info": "",
         }
 
     def get_next_question(self) -> tuple:
@@ -323,8 +326,11 @@ class BookingState:
             "passenger_name",
             "national_id",
             "flight_number",
+            "passport_number",
             "baggage_count",
-            "phone_number",
+            "passenger_type",
+            "gender",
+            "additional_info",
         ]
         if self.current_step < len(questions):
             return questions[self.current_step], self.current_step
@@ -422,8 +428,16 @@ You are an AI assistant named "Binad" who provides airport services at Imam Khom
 - Passenger name: "Please provide the passenger's full name."
 - National ID: "Please provide the passenger's national ID."
 - Flight number: "Please provide the flight number."
+- Passport number: "Please provide the passenger's passport number."
 - Number of bags: "Please provide the number of bags."
-- Contact number: "Please provide the contact number."
+- Passenger type: "Is the passenger an adult or infant?"
+- Gender: "What is the passenger's gender?"
+- Additional info: "Any additional information you would like to provide?"
+
+# Important Note:
+- After asking for passenger count, you must collect ALL information for EACH passenger separately
+- For each passenger, ask: name, national ID, passport number, baggage count, passenger type (adult/infant), and gender
+- Make it very clear that you are asking for each passenger individually
 
 # Knowledge Base:
 {knowledge_base}
@@ -464,8 +478,16 @@ You are an AI assistant named "Binad" who provides airport services at Imam Khom
 - نام مسافر: "نام و نام خانوادگی مسافر رو بفرمایید."
 - کد ملی: "کد ملی مسافر رو بفرمایید."
 - شماره پرواز: "شماره پرواز رو بفرمایید."
+- شماره گذرنامه: "شماره گذرنامه مسافر رو بفرمایید."
 - تعداد چمدان: "تعداد چمدان‌ها رو بفرمایید."
-- شماره تماس: "شماره تماس رو بفرمایید."
+- نوع مسافر: "نوع مسافر بزرگسال است یا نوزاد؟"
+- جنسیت: "جنسیت مسافر چیه؟"
+- توضیح اضافه: "توضیح اضافه‌ای که می‌خواید بگید؟"
+
+# نکته مهم:
+- بعد از پرسیدن تعداد مسافران، باید اطلاعات همه مسافران را جداگانه و به صورت واضح جمع‌آوری کنی
+- برای هر مسافر، بپرس: نام، کد ملی، شماره گذرنامه، تعداد چمدان، نوع مسافر (بزرگسال/نوزاد) و جنسیت
+- حتماً واضح بگو که برای هر مسافر جداگانه سوال می‌کنی
 
 # دانش‌نامه:
 {knowledge_base}
@@ -713,13 +735,16 @@ You are an AI assistant named "Binad" who provides airport services at Imam Khom
             en_mapping: Dict[str, str] = {
                 "origin_airport": "Please provide the origin airport name.",
                 "travel_type": "Is your flight arriving at the airport or departing?",
-                "travel_date": "Please provide the travel date.",
+                "travel_date": "Please provide the travel date (Gregorian calendar).",
                 "passenger_count": "What is the exact number of passengers?",
                 "passenger_name": "Please provide the passenger's full name.",
                 "national_id": "Please provide the passenger's national ID.",
                 "flight_number": "Please provide the flight number.",
+                "passport_number": "Please provide the passenger's passport number.",
                 "baggage_count": "Please provide the number of bags.",
-                "phone_number": "Please provide the contact number.",
+                "passenger_type": "Is the passenger an adult or infant?",
+                "gender": "What is the passenger's gender?",
+                "additional_info": "Any additional information you would like to provide?",
                 "completed": "Excellent! All your information has been received. You can now view and modify the information through the QR code if needed.",
             }
             return en_mapping.get(key, "")
@@ -727,13 +752,16 @@ You are an AI assistant named "Binad" who provides airport services at Imam Khom
             fa_mapping: Dict[str, str] = {
                 "origin_airport": "نام فرودگاه مبدا رو بفرمایید.",
                 "travel_type": "پروازتون ورودی به فرودگاهه یا خروجی؟",
-                "travel_date": "تاریخ سفر رو بفرمایید.",
+                "travel_date": "تاریخ سفر رو به میلادی بفرمایید.",
                 "passenger_count": "تعداد دقیق مسافران چند نفر است؟",
                 "passenger_name": "نام و نام خانوادگی مسافر رو بفرمایید.",
                 "national_id": "کد ملی مسافر رو بفرمایید.",
                 "flight_number": "شماره پرواز رو بفرمایید.",
+                "passport_number": "شماره گذرنامه مسافر رو بفرمایید.",
                 "baggage_count": "تعداد چمدان‌ها رو بفرمایید.",
-                "phone_number": "شماره تماس رو بفرمایید.",
+                "passenger_type": "نوع مسافر بزرگسال است یا نوزاد؟",
+                "gender": "جنسیت مسافر چیه؟",
+                "additional_info": "توضیح اضافه‌ای که می‌خواید بگید؟",
                 "completed": "عالی! همه اطلاعات شما دریافت شد. حالا می‌توانید از طریق کیو آر کد اطلاعات را مشاهده و در صورت نیاز اصلاح کنید.",
             }
             return fa_mapping.get(key, "")
