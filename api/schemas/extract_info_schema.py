@@ -14,6 +14,29 @@ class Passenger(BaseModel):
     gender: str
 
 
+class PassengerData(BaseModel):
+    """Individual passenger data structure"""
+
+    name: str = ""
+    nationalId: str = ""
+    flightNumber: str = ""
+    passportNumber: str = ""
+    baggageCount: str = ""
+    passengerType: str = ""  # "adult" or "infant"
+    gender: str = ""
+
+
+class BookingStateData(BaseModel):
+    """Complete booking state data including passenger information"""
+
+    origin_airport: str = ""
+    travel_type: str = ""
+    travel_date: str = ""
+    passenger_count: str = ""
+    passengers_data: List[PassengerData] = []
+    additional_info: str = ""
+
+
 class MessageSender(str, Enum):
     CLIENT = "CLIENT"
     AVATAR = "AVATAR"

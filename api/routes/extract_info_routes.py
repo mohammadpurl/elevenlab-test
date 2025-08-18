@@ -1,6 +1,11 @@
 from fastapi import APIRouter, HTTPException, Request
-from api.schemas.extract_info_schema import ExtractInfoRequest, ExtractInfoResponse
+from api.schemas.extract_info_schema import (
+    ExtractInfoRequest,
+    ExtractInfoResponse,
+    BookingStateData,
+)
 from api.services.extract_info_service import call_openai
+from api.services.openai_service import OpenAIService
 import json
 import logging
 
@@ -22,6 +27,49 @@ async def extract_info(request: ExtractInfoRequest):
         return result
     except Exception as e:
         logger.error(f"Error in extract_info: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/booking-state/{session_id}", response_model=BookingStateData)
+async def get_booking_state(session_id: str):
+    """Get the current booking state including all passenger information for a session"""
+    try:
+        openai_service = OpenAIService()
+
+        # Check if session exists and has booking state
+        if session_id not in openai_service.booking_states:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        booking_state = openai_service.booking_states[session_id]
+
+        # Convert passenger data to the schema format
+        passengers_data = []
+        for passenger in booking_state.passengers_data:
+            passenger_data = {
+                "name": passenger.get("passenger_name", ""),
+                "nationalId": passenger.get("national_id", ""),
+                "flightNumber": passenger.get("flight_number", ""),
+                "passportNumber": passenger.get("passport_number", ""),
+                "baggageCount": passenger.get("baggage_count", ""),
+                "passengerType": passenger.get("passenger_type", ""),
+                "gender": passenger.get("gender", ""),
+            }
+            passengers_data.append(passenger_data)
+
+        # Create response
+        response = BookingStateData(
+            origin_airport=booking_state.collected_data.get("origin_airport", ""),
+            travel_type=booking_state.collected_data.get("travel_type", ""),
+            travel_date=booking_state.collected_data.get("travel_date", ""),
+            passenger_count=booking_state.collected_data.get("passenger_count", ""),
+            passengers_data=passengers_data,
+            additional_info=booking_state.collected_data.get("additional_info", ""),
+        )
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Error getting booking state: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
