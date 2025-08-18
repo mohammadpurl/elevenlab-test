@@ -48,7 +48,6 @@ async def get_booking_state(session_id: str):
             passenger_data = {
                 "name": passenger.get("passenger_name", ""),
                 "nationalId": passenger.get("national_id", ""),
-                "flightNumber": passenger.get("flight_number", ""),
                 "passportNumber": passenger.get("passport_number", ""),
                 "baggageCount": passenger.get("baggage_count", ""),
                 "passengerType": passenger.get("passenger_type", ""),
@@ -56,11 +55,12 @@ async def get_booking_state(session_id: str):
             }
             passengers_data.append(passenger_data)
 
-        # Create response
+        # Create response (flight number is now top-level, not per passenger)
         response = BookingStateData(
             origin_airport=booking_state.collected_data.get("origin_airport", ""),
             travel_type=booking_state.collected_data.get("travel_type", ""),
             travel_date=booking_state.collected_data.get("travel_date", ""),
+            flight_number=booking_state.collected_data.get("flight_number", ""),
             passenger_count=booking_state.collected_data.get("passenger_count", ""),
             passengers_data=passengers_data,
             additional_info=booking_state.collected_data.get("additional_info", ""),

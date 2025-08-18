@@ -19,7 +19,6 @@ class PassengerData(BaseModel):
 
     name: str = ""
     nationalId: str = ""
-    flightNumber: str = ""
     passportNumber: str = ""
     baggageCount: str = ""
     passengerType: str = ""  # "adult" or "infant"
@@ -32,6 +31,7 @@ class BookingStateData(BaseModel):
     origin_airport: str = ""
     travel_type: str = ""
     travel_date: str = ""
+    flight_number: str = ""
     passenger_count: str = ""
     passengers_data: List[PassengerData] = []
     additional_info: str = ""

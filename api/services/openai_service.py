@@ -60,6 +60,7 @@ class OpenAIService:
 
             self.api_url = "https://api.openai.com/v1/chat/completions"
             self.memory = OpenAIService._memory
+            self.booking_states: Dict[str, dict] = {}
             self.initialized = True
 
     def get_assistant_response(
