@@ -7,22 +7,10 @@ class Passenger(BaseModel):
     name: str
     lastName: str
     nationalId: str
-    flightNumber: str
     passportNumber: str
     luggageCount: int
     passengerType: str  # "adult" or "infant"
     gender: str
-
-
-class PassengerData(BaseModel):
-    """Individual passenger data structure"""
-
-    name: str = ""
-    nationalId: str = ""
-    passportNumber: str = ""
-    baggageCount: str = ""
-    passengerType: str = ""  # "adult" or "infant"
-    gender: str = ""
 
 
 class BookingStateData(BaseModel):
@@ -33,7 +21,7 @@ class BookingStateData(BaseModel):
     travel_date: str = ""
     flight_number: str = ""
     passenger_count: str = ""
-    passengers_data: List[PassengerData] = []
+    passengers_data: List[Passenger] = []
     additional_info: str = ""
 
 

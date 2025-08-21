@@ -133,7 +133,6 @@ def test_extract_info():
                         "name",
                         "lastName",
                         "nationalId",
-                        "flightNumber",
                         "passportNumber",
                         "luggageCount",
                         "passengerType",

@@ -48,8 +48,7 @@ Each passenger's information is stored in a structured format:
 ```python
 class PassengerData(BaseModel):
     name: str = ""
-    nationalId: str = ""
-    flightNumber: str = ""
+    nationalId: str = ""    
     passportNumber: str = ""
     baggageCount: str = ""
     passengerType: str = ""  # "adult" or "infant"

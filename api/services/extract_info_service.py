@@ -24,12 +24,12 @@ async def call_openai(messages: ExtractInfoRequest):
         '  "travelType": string (either "arrival" or "departure"),\n'
         '  "travelDate": string,\n'
         '  "passengerCount": number,\n'
+        '   "flightNumber": string,\n'
         '  "passengers": [\n'
         "    {\n"
         '      "name": string,\n'
         '      "lastName": string,\n'
         '      "nationalId": string,\n'
-        '      "flightNumber": string,\n'
         '      "passportNumber": string,\n'
         '      "luggageCount": number,\n'
         '      "passengerType": string (either "adult" or "infant"),\n'

@@ -6,6 +6,7 @@ from api.schemas.extract_info_schema import (
 )
 from api.services.extract_info_service import call_openai
 from api.services.openai_service import OpenAIService
+from api.schemas.extract_info_schema import Passenger
 import json
 import logging
 
@@ -42,28 +43,46 @@ async def get_booking_state(session_id: str):
 
         booking_state = openai_service.booking_states[session_id]
 
-        # Convert passenger data to the schema format
-        passengers_data = []
-        for passenger in booking_state.passengers_data:
-            passenger_data = {
-                "name": passenger.get("passenger_name", ""),
-                "nationalId": passenger.get("national_id", ""),
-                "passportNumber": passenger.get("passport_number", ""),
-                "baggageCount": passenger.get("baggage_count", ""),
-                "passengerType": passenger.get("passenger_type", ""),
-                "gender": passenger.get("gender", ""),
-            }
-            passengers_data.append(passenger_data)
+        # Treat booking_state as a dict and safely access fields
+        collected = (
+            booking_state.get("collected_data", {})
+            if isinstance(booking_state, dict)
+            else {}
+        )
+        raw_passengers = (
+            booking_state.get("passengers_data", [])
+            if isinstance(booking_state, dict)
+            else []
+        )
+
+        # Convert passenger dicts to Passenger models, mapping keys safely
+        passengers_data: list[Passenger] = []
+        for p in raw_passengers:
+            if not isinstance(p, dict):
+                continue
+            passengers_data.append(
+                Passenger(
+                    name=p.get("name", p.get("passenger_name", "")),
+                    lastName=p.get("lastName", p.get("last_name", "")),
+                    nationalId=p.get("nationalId", p.get("national_id", "")),
+                    passportNumber=p.get(
+                        "passportNumber", p.get("passport_number", "")
+                    ),
+                    luggageCount=p.get("luggageCount", p.get("baggage_count", 0)) or 0,
+                    passengerType=p.get("passengerType", p.get("passenger_type", "")),
+                    gender=p.get("gender", ""),
+                )
+            )
 
         # Create response (flight number is now top-level, not per passenger)
         response = BookingStateData(
-            origin_airport=booking_state.collected_data.get("origin_airport", ""),
-            travel_type=booking_state.collected_data.get("travel_type", ""),
-            travel_date=booking_state.collected_data.get("travel_date", ""),
-            flight_number=booking_state.collected_data.get("flight_number", ""),
-            passenger_count=booking_state.collected_data.get("passenger_count", ""),
+            origin_airport=collected.get("origin_airport", ""),
+            travel_type=collected.get("travel_type", ""),
+            travel_date=collected.get("travel_date", ""),
+            flight_number=collected.get("flight_number", ""),
+            passenger_count=collected.get("passenger_count", ""),
             passengers_data=passengers_data,
-            additional_info=booking_state.collected_data.get("additional_info", ""),
+            additional_info=collected.get("additional_info", ""),
         )
 
         return response
