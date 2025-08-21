@@ -41,8 +41,12 @@ async def text_to_speech(request: TextToSpeechRequest):
         )
 
         # تولید فایل صوتی با استفاده از متد جدید
+        voice_id = os.getenv("ELEVENLABS_VOICE_ID")
+        if not voice_id:
+            raise ValueError("ELEVENLABS_VOICE_ID is not set in environment variables")
+
         audio_stream = client.text_to_speech.convert(
-            voice_id=os.getenv("ELEVENLABS_VOICE_ID")
+            voice_id=voice_id,
             text=request.text,
             model_id="eleven_multilingual_v2",
             voice_settings=voice_settings,
