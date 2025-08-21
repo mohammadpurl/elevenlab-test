@@ -27,7 +27,7 @@ client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 # مدل داده برای درخواست
 class TextToSpeechRequest(BaseModel):
     text: str
-    voice_id: str = "pNInz6obpgDQGcFmaJgB"  # صدای پیش‌فرض (Adam)
+    # voice_id: str = "pjcYQlDFKMbcOUp6F5GD"  # صدای پیش‌فرض (Adam)
     stability: float = 0.7
     similarity_boost: float = 0.8
 
@@ -42,7 +42,7 @@ async def text_to_speech(request: TextToSpeechRequest):
 
         # تولید فایل صوتی با استفاده از متد جدید
         audio_stream = client.text_to_speech.convert(
-            voice_id=request.voice_id,
+            voice_id=os.getenv("ELEVENLABS_VOICE_ID")
             text=request.text,
             model_id="eleven_multilingual_v2",
             voice_settings=voice_settings,
