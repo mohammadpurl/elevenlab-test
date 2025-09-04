@@ -155,6 +155,7 @@ def test_extract_info_english():
                 "travelType",
                 "travelDate",
                 "passengerCount",
+                "flightNumber",
                 "passengers",
                 "additionalInfo",
             ]
@@ -173,7 +174,6 @@ def test_extract_info_english():
                         "name",
                         "lastName",
                         "nationalId",
-                        "flightNumber",
                         "passportNumber",
                         "luggageCount",
                         "passengerType",

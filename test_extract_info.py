@@ -115,6 +115,7 @@ def test_extract_info():
                 "travelType",
                 "travelDate",
                 "passengerCount",
+                "flightNumber",
                 "passengers",
                 "additionalInfo",
             ]

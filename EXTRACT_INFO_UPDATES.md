@@ -9,7 +9,6 @@ This document describes the updates made to the `extract_info` service to align 
 
 #### Passenger Model Updates
 - **Changed `fullName` to `name` and `lastName`**: Split full name into separate first and last name fields
-- **Added `flightNumber`**: Flight number for each passenger
 - **Added `passportNumber`**: Passport number for each passenger  
 - **Added `passengerType`**: Type of passenger (adult or infant)
 - **Added `gender`**: Gender of the passenger
@@ -17,7 +16,7 @@ This document describes the updates made to the `extract_info` service to align 
 #### ExtractInfoResponse Updates
 - **Added `travelType`**: Type of travel (arrival or departure)
 - **Added `passengerCount`**: Total number of passengers
-- **Removed `flightNumber`**: Moved to individual passenger level
+- **Added `flightNumber`**: Flight number for the booking
 - **Added `additionalInfo`**: Optional additional information
 
 ### 2. Service Updates (`api/services/extract_info_service.py`)
@@ -59,12 +58,12 @@ The extraction prompt now includes:
   "travelType": "string",  // "arrival" or "departure"
   "travelDate": "string",
   "passengerCount": "number",
+  "flightNumber": "string",
   "passengers": [
     {
       "name": "string",
       "lastName": "string",
       "nationalId": "string",
-      "flightNumber": "string",
       "passportNumber": "string",
       "luggageCount": "number",
       "passengerType": "string",  // "adult" or "infant"
@@ -126,13 +125,13 @@ if response.status_code == 200:
     print(f"Airport: {booking_info['airportName']}")
     print(f"Travel Type: {booking_info['travelType']}")
     print(f"Passengers: {booking_info['passengerCount']}")
+    print(f"Flight Number: {booking_info['flightNumber']}")
     
     for i, passenger in enumerate(booking_info['passengers']):
         print(f"\nPassenger {i+1}:")
         print(f"  Name: {passenger['name']}")
         print(f"  Last Name: {passenger['lastName']}")
         print(f"  National ID: {passenger['nationalId']}")
-        print(f"  Flight Number: {passenger['flightNumber']}")
         print(f"  Passport: {passenger['passportNumber']}")
         print(f"  Bags: {passenger['luggageCount']}")
         print(f"  Type: {passenger['passengerType']}")

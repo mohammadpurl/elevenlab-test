@@ -45,6 +45,7 @@ class ExtractInfoResponse(BaseModel):
     travelType: str  # "arrival" or "departure"
     travelDate: str
     passengerCount: int
+    flightNumber: str
     passengers: List[Passenger]
     additionalInfo: Optional[str] = None
 

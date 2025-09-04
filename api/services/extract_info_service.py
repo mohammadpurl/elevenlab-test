@@ -24,7 +24,7 @@ async def call_openai(messages: ExtractInfoRequest):
         '  "travelType": string (either "arrival" or "departure"),\n'
         '  "travelDate": string,\n'
         '  "passengerCount": number,\n'
-        '   "flightNumber": string,\n'
+        '  "flightNumber": string,\n'
         '  "passengers": [\n'
         "    {\n"
         '      "name": string,\n'
@@ -72,6 +72,7 @@ async def call_openai(messages: ExtractInfoRequest):
             logger.info(f"OpenAI response: {text}")
 
             try:
+                print("extract_info_service", text)
                 return json.loads(text)
             except json.JSONDecodeError:
                 import re
