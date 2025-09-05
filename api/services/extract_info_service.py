@@ -40,6 +40,7 @@ async def call_openai(messages: ExtractInfoRequest):
         "}\n"
         "Important: Extract information for each passenger separately. Each passenger should have their own complete set of information.\n"
         "If the flight number contains letters that were spoken or written using Persian letters (e.g., 'کیو آر'), convert them to English Latin letters (e.g., 'QR'). Also normalize any Persian/Arabic digits to Western digits. Return the normalized flight number (uppercase, no spaces or hyphens).\n"
+        "For passenger names (name and lastName), if they are provided in Persian/Farsi, convert them to English transliteration using standard Persian-to-Latin transliteration rules.\n"
         "If any field is missing, use an empty string or 0. Only return the JSON object, nothing else.\n\n"
         "Conversation:\n"
         + "\n".join(f"{m.sender}: {m.text}" for m in messages.messages)
@@ -109,10 +110,86 @@ async def call_openai(messages: ExtractInfoRequest):
                     normalized = normalized.replace(" ", "").replace("-", "").upper()
                     return normalized
 
-                if isinstance(extracted, dict) and "flightNumber" in extracted:
-                    extracted["flightNumber"] = normalize_flight_number(
-                        extracted.get("flightNumber", "")
-                    )
+                # Normalize passenger names: convert Persian to English transliteration
+                def normalize_name(value: str) -> str:
+                    if not isinstance(value, str):
+                        return ""
+                    # Basic Persian to Latin transliteration mapping
+                    persian_to_latin = {
+                        "آ": "A",
+                        "ا": "A",
+                        "ب": "B",
+                        "پ": "P",
+                        "ت": "T",
+                        "ث": "S",
+                        "ج": "J",
+                        "چ": "CH",
+                        "ح": "H",
+                        "خ": "KH",
+                        "د": "D",
+                        "ذ": "Z",
+                        "ر": "R",
+                        "ز": "Z",
+                        "ژ": "ZH",
+                        "س": "S",
+                        "ش": "SH",
+                        "ص": "S",
+                        "ض": "Z",
+                        "ط": "T",
+                        "ظ": "Z",
+                        "ع": "A",
+                        "غ": "GH",
+                        "ف": "F",
+                        "ق": "GH",
+                        "ک": "K",
+                        "گ": "G",
+                        "ل": "L",
+                        "م": "M",
+                        "ن": "N",
+                        "و": "V",
+                        "ه": "H",
+                        "ی": "Y",
+                        "ئ": "E",
+                        "ء": "E",
+                        "ة": "H",
+                        "أ": "A",
+                        "إ": "E",
+                        "ؤ": "O",
+                        "ي": "Y",
+                    }
+
+                    # Convert Persian characters to Latin
+                    normalized = ""
+                    for char in value:
+                        if char in persian_to_latin:
+                            normalized += persian_to_latin[char]
+                        else:
+                            normalized += char
+
+                    # Clean up and format
+                    normalized = normalized.strip().title()
+                    return normalized
+
+                if isinstance(extracted, dict):
+                    if "flightNumber" in extracted:
+                        extracted["flightNumber"] = normalize_flight_number(
+                            extracted.get("flightNumber", "")
+                        )
+
+                    # Normalize passenger names
+                    if "passengers" in extracted and isinstance(
+                        extracted["passengers"], list
+                    ):
+                        for passenger in extracted["passengers"]:
+                            if isinstance(passenger, dict):
+                                if "name" in passenger:
+                                    passenger["name"] = normalize_name(
+                                        passenger.get("name", "")
+                                    )
+                                if "lastName" in passenger:
+                                    passenger["lastName"] = normalize_name(
+                                        passenger.get("lastName", "")
+                                    )
 
                 return extracted
             except json.JSONDecodeError:
@@ -155,10 +232,79 @@ async def call_openai(messages: ExtractInfoRequest):
                         )
                         return normalized
 
-                    if isinstance(extracted, dict) and "flightNumber" in extracted:
-                        extracted["flightNumber"] = normalize_flight_number(
-                            extracted.get("flightNumber", "")
-                        )
+                    def normalize_name(value: str) -> str:
+                        if not isinstance(value, str):
+                            return ""
+                        persian_to_latin = {
+                            "آ": "A",
+                            "ا": "A",
+                            "ب": "B",
+                            "پ": "P",
+                            "ت": "T",
+                            "ث": "S",
+                            "ج": "J",
+                            "چ": "CH",
+                            "ح": "H",
+                            "خ": "KH",
+                            "د": "D",
+                            "ذ": "Z",
+                            "ر": "R",
+                            "ز": "Z",
+                            "ژ": "ZH",
+                            "س": "S",
+                            "ش": "SH",
+                            "ص": "S",
+                            "ض": "Z",
+                            "ط": "T",
+                            "ظ": "Z",
+                            "ع": "A",
+                            "غ": "GH",
+                            "ف": "F",
+                            "ق": "GH",
+                            "ک": "K",
+                            "گ": "G",
+                            "ل": "L",
+                            "م": "M",
+                            "ن": "N",
+                            "و": "V",
+                            "ه": "H",
+                            "ی": "Y",
+                            "ئ": "E",
+                            "ء": "E",
+                            "ة": "H",
+                            "أ": "A",
+                            "إ": "E",
+                            "ؤ": "O",
+                            "ي": "Y",
+                        }
+                        normalized = ""
+                        for char in value:
+                            if char in persian_to_latin:
+                                normalized += persian_to_latin[char]
+                            else:
+                                normalized += char
+                        normalized = normalized.strip().title()
+                        return normalized
+
+                    if isinstance(extracted, dict):
+                        if "flightNumber" in extracted:
+                            extracted["flightNumber"] = normalize_flight_number(
+                                extracted.get("flightNumber", "")
+                            )
+
+                        if "passengers" in extracted and isinstance(
+                            extracted["passengers"], list
+                        ):
+                            for passenger in extracted["passengers"]:
+                                if isinstance(passenger, dict):
+                                    if "name" in passenger:
+                                        passenger["name"] = normalize_name(
+                                            passenger.get("name", "")
+                                        )
+                                    if "lastName" in passenger:
+                                        passenger["lastName"] = normalize_name(
+                                            passenger.get("lastName", "")
+                                        )
 
                     return extracted
                 raise ValueError("Failed to parse OpenAI response")
