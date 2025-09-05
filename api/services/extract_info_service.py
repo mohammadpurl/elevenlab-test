@@ -39,6 +39,7 @@ async def call_openai(messages: ExtractInfoRequest):
         '  "additionalInfo": string (optional)\n'
         "}\n"
         "Important: Extract information for each passenger separately. Each passenger should have their own complete set of information.\n"
+        "If the flight number contains letters that were spoken or written using Persian letters (e.g., 'کیو آر'), convert them to English Latin letters (e.g., 'QR'). Also normalize any Persian/Arabic digits to Western digits. Return the normalized flight number (uppercase, no spaces or hyphens).\n"
         "If any field is missing, use an empty string or 0. Only return the JSON object, nothing else.\n\n"
         "Conversation:\n"
         + "\n".join(f"{m.sender}: {m.text}" for m in messages.messages)
@@ -73,13 +74,93 @@ async def call_openai(messages: ExtractInfoRequest):
 
             try:
                 print("extract_info_service", text)
-                return json.loads(text)
+                extracted = json.loads(text)
+
+                # Normalize flight number: convert Persian/Arabic digits, uppercase, remove spaces/hyphens
+                def normalize_flight_number(value: str) -> str:
+                    if not isinstance(value, str):
+                        return ""
+                    # Map Persian and Arabic-Indic digits to Western digits
+                    digit_map = str.maketrans(
+                        {
+                            "۰": "0",
+                            "۱": "1",
+                            "۲": "2",
+                            "۳": "3",
+                            "۴": "4",
+                            "۵": "5",
+                            "۶": "6",
+                            "۷": "7",
+                            "۸": "8",
+                            "۹": "9",
+                            "٠": "0",
+                            "١": "1",
+                            "٢": "2",
+                            "٣": "3",
+                            "٤": "4",
+                            "٥": "5",
+                            "٦": "6",
+                            "٧": "7",
+                            "٨": "8",
+                            "٩": "9",
+                        }
+                    )
+                    normalized = value.translate(digit_map)
+                    normalized = normalized.replace(" ", "").replace("-", "").upper()
+                    return normalized
+
+                if isinstance(extracted, dict) and "flightNumber" in extracted:
+                    extracted["flightNumber"] = normalize_flight_number(
+                        extracted.get("flightNumber", "")
+                    )
+
+                return extracted
             except json.JSONDecodeError:
                 import re
 
                 match = re.search(r"\{[\s\S]*\}", text)
                 if match:
-                    return json.loads(match.group(0))
+                    extracted = json.loads(match.group(0))
+
+                    def normalize_flight_number(value: str) -> str:
+                        if not isinstance(value, str):
+                            return ""
+                        digit_map = str.maketrans(
+                            {
+                                "۰": "0",
+                                "۱": "1",
+                                "۲": "2",
+                                "۳": "3",
+                                "۴": "4",
+                                "۵": "5",
+                                "۶": "6",
+                                "۷": "7",
+                                "۸": "8",
+                                "۹": "9",
+                                "٠": "0",
+                                "١": "1",
+                                "٢": "2",
+                                "٣": "3",
+                                "٤": "4",
+                                "٥": "5",
+                                "٦": "6",
+                                "٧": "7",
+                                "٨": "8",
+                                "٩": "9",
+                            }
+                        )
+                        normalized = value.translate(digit_map)
+                        normalized = (
+                            normalized.replace(" ", "").replace("-", "").upper()
+                        )
+                        return normalized
+
+                    if isinstance(extracted, dict) and "flightNumber" in extracted:
+                        extracted["flightNumber"] = normalize_flight_number(
+                            extracted.get("flightNumber", "")
+                        )
+
+                    return extracted
                 raise ValueError("Failed to parse OpenAI response")
 
     except httpx.HTTPStatusError as e:
