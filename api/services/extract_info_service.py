@@ -170,13 +170,20 @@ async def call_openai(messages: ExtractInfoRequest):
                     normalized = normalized.strip().title()
                     return normalized
 
+                # Normalize ID numbers: remove spaces from national ID, passport, and phone numbers
+                def normalize_id_number(value: str) -> str:
+                    if not isinstance(value, str):
+                        return ""
+                    # Remove all spaces and normalize
+                    return value.replace(" ", "").strip()
+
                 if isinstance(extracted, dict):
                     if "flightNumber" in extracted:
                         extracted["flightNumber"] = normalize_flight_number(
                             extracted.get("flightNumber", "")
                         )
 
-                    # Normalize passenger names
+                    # Normalize passenger names and ID numbers
                     if "passengers" in extracted and isinstance(
                         extracted["passengers"], list
                     ):
@@ -189,6 +196,14 @@ async def call_openai(messages: ExtractInfoRequest):
                                 if "lastName" in passenger:
                                     passenger["lastName"] = normalize_name(
                                         passenger.get("lastName", "")
+                                    )
+                                if "nationalId" in passenger:
+                                    passenger["nationalId"] = normalize_id_number(
+                                        passenger.get("nationalId", "")
+                                    )
+                                if "passportNumber" in passenger:
+                                    passenger["passportNumber"] = normalize_id_number(
+                                        passenger.get("passportNumber", "")
                                     )
 
                 return extracted
@@ -286,6 +301,11 @@ async def call_openai(messages: ExtractInfoRequest):
                         normalized = normalized.strip().title()
                         return normalized
 
+                    def normalize_id_number(value: str) -> str:
+                        if not isinstance(value, str):
+                            return ""
+                        return value.replace(" ", "").strip()
+
                     if isinstance(extracted, dict):
                         if "flightNumber" in extracted:
                             extracted["flightNumber"] = normalize_flight_number(
@@ -304,6 +324,16 @@ async def call_openai(messages: ExtractInfoRequest):
                                     if "lastName" in passenger:
                                         passenger["lastName"] = normalize_name(
                                             passenger.get("lastName", "")
+                                        )
+                                    if "nationalId" in passenger:
+                                        passenger["nationalId"] = normalize_id_number(
+                                            passenger.get("nationalId", "")
+                                        )
+                                    if "passportNumber" in passenger:
+                                        passenger["passportNumber"] = (
+                                            normalize_id_number(
+                                                passenger.get("passportNumber", "")
+                                            )
                                         )
 
                     return extracted
