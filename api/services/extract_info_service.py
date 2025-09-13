@@ -31,6 +31,7 @@ async def call_openai(messages: ExtractInfoRequest):
         '      "lastName": string,\n'
         '      "nationalId": string,\n'
         '      "passportNumber": string,\n'
+        '      "nationality": string,\n'
         '      "luggageCount": number,\n'
         '      "passengerType": string (either "adult" or "infant"),\n'
         '      "gender": string\n'
@@ -41,6 +42,7 @@ async def call_openai(messages: ExtractInfoRequest):
         "Important: Extract information for each passenger separately. Each passenger should have their own complete set of information.\n"
         "If the flight number contains letters that were spoken or written using Persian letters (e.g., 'کیو آر'), convert them to English Latin letters (e.g., 'QR'). Also normalize any Persian/Arabic digits to Western digits. Return the normalized flight number (uppercase, no spaces or hyphens).\n"
         "For passenger names (name and lastName), if they are provided in Persian/Farsi, convert them to English transliteration using standard Persian-to-Latin transliteration rules.\n"
+        "For nationality field, valid values are: 'ایرانی' (Iranian), 'غیر ایرانی' (Non-Iranian), 'دپلمات' (Diplomat). Convert Persian values to English equivalents: 'ایرانی' -> 'Iranian', 'غیر ایرانی' -> 'Non-Iranian', 'دپلمات' -> 'Diplomat'.\n"
         "If any field is missing, use an empty string or 0. Only return the JSON object, nothing else.\n\n"
         "Conversation:\n"
         + "\n".join(f"{m.sender}: {m.text}" for m in messages.messages)
@@ -177,6 +179,25 @@ async def call_openai(messages: ExtractInfoRequest):
                     # Remove all spaces and normalize
                     return value.replace(" ", "").strip()
 
+                # Normalize nationality: convert Persian to English equivalents
+                def normalize_nationality(value: str) -> str:
+                    if not isinstance(value, str):
+                        return ""
+
+                    # Map Persian nationality values to English
+                    nationality_map = {
+                        "ایرانی": "Iranian",
+                        "غیر ایرانی": "Non-Iranian",
+                        "دپلمات": "Diplomat",
+                    }
+
+                    # Check for exact matches first
+                    if value.strip() in nationality_map:
+                        return nationality_map[value.strip()]
+
+                    # If not found, use the general name normalization
+                    return normalize_name(value)
+
                 if isinstance(extracted, dict):
                     if "flightNumber" in extracted:
                         extracted["flightNumber"] = normalize_flight_number(
@@ -204,6 +225,10 @@ async def call_openai(messages: ExtractInfoRequest):
                                 if "passportNumber" in passenger:
                                     passenger["passportNumber"] = normalize_id_number(
                                         passenger.get("passportNumber", "")
+                                    )
+                                if "nationality" in passenger:
+                                    passenger["nationality"] = normalize_nationality(
+                                        passenger.get("nationality", "")
                                     )
 
                 return extracted
@@ -306,6 +331,24 @@ async def call_openai(messages: ExtractInfoRequest):
                             return ""
                         return value.replace(" ", "").strip()
 
+                    def normalize_nationality(value: str) -> str:
+                        if not isinstance(value, str):
+                            return ""
+
+                        # Map Persian nationality values to English
+                        nationality_map = {
+                            "ایرانی": "Iranian",
+                            "غیر ایرانی": "Non-Iranian",
+                            "دپلمات": "Diplomat",
+                        }
+
+                        # Check for exact matches first
+                        if value.strip() in nationality_map:
+                            return nationality_map[value.strip()]
+
+                        # If not found, use the general name normalization
+                        return normalize_name(value)
+
                     if isinstance(extracted, dict):
                         if "flightNumber" in extracted:
                             extracted["flightNumber"] = normalize_flight_number(
@@ -333,6 +376,12 @@ async def call_openai(messages: ExtractInfoRequest):
                                         passenger["passportNumber"] = (
                                             normalize_id_number(
                                                 passenger.get("passportNumber", "")
+                                            )
+                                        )
+                                    if "nationality" in passenger:
+                                        passenger["nationality"] = (
+                                            normalize_nationality(
+                                                passenger.get("nationality", "")
                                             )
                                         )
 
