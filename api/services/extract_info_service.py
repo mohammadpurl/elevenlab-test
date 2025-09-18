@@ -13,7 +13,7 @@ OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 async def call_openai(messages: ExtractInfoRequest):
     if not OPENAI_API_KEY:
-        logger.error("OPENAI_API_KEY is not set")
+        logger.error("OPENAI_API_KEY is not set yet")
         raise ValueError("OPENAI_API_KEY environment variable is not set")
 
     prompt = (
