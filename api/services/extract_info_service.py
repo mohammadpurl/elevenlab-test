@@ -236,12 +236,75 @@ async def call_openai(messages: ExtractInfoRequest):
                     # If not found, use the general name normalization
                     return normalize_name(value)
 
+                # Try to find buyer phone from raw conversation if missing
+                def find_buyer_phone_from_conversation() -> str:
+                    # Build a digit translator once
+                    digit_map = str.maketrans(
+                        {
+                            "۰": "0",
+                            "۱": "1",
+                            "۲": "2",
+                            "۳": "3",
+                            "۴": "4",
+                            "۵": "5",
+                            "۶": "6",
+                            "۷": "7",
+                            "۸": "8",
+                            "۹": "9",
+                            "٠": "0",
+                            "١": "1",
+                            "٢": "2",
+                            "٣": "3",
+                            "٤": "4",
+                            "٥": "5",
+                            "٦": "6",
+                            "٧": "7",
+                            "٨": "8",
+                            "٩": "9",
+                        }
+                    )
+
+                    candidates: list[str] = []
+                    import re
+
+                    for m in messages.messages:
+                        text = getattr(m, "text", "") or ""
+                        s = str(text).translate(digit_map)
+                        # Find sequences with digits/space/hyphen/plus of reasonable length
+                        for match in re.findall(r"\+?[\d\s\-]{9,20}", s):
+                            normalized = normalize_buyer_phone(match)
+                            # Basic validity: at least 10 digits (excluding +), at most 15
+                            digits_only = normalized.lstrip("+")
+                            if digits_only.isdigit() and 10 <= len(digits_only) <= 15:
+                                candidates.append(normalized)
+
+                    # Prefer the last mentioned, prioritizing +98/0098 or 09 prefixes
+                    def score(num: str) -> int:
+                        n = num.lstrip("+")
+                        if num.startswith("+98") or n.startswith("0098"):
+                            return 3
+                        if n.startswith("98"):
+                            return 2
+                        if n.startswith("09"):
+                            return 2
+                        return 1
+
+                    if candidates:
+                        candidates.sort(key=lambda x: (score(x), len(x)), reverse=True)
+                        return candidates[0]
+                    return ""
+
                 if isinstance(extracted, dict):
                     # Normalize buyer_phone if present
                     if "buyer_phone" in extracted:
                         extracted["buyer_phone"] = normalize_buyer_phone(
                             extracted.get("buyer_phone", "")
                         )
+                    # If still empty, try to detect from conversation
+                    if not extracted.get("buyer_phone"):
+                        auto_phone = find_buyer_phone_from_conversation()
+                        if auto_phone:
+                            extracted["buyer_phone"] = auto_phone
                     if "flightNumber" in extracted:
                         extracted["flightNumber"] = normalize_flight_number(
                             extracted.get("flightNumber", "")
