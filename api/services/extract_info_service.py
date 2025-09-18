@@ -23,6 +23,7 @@ async def call_openai(messages: ExtractInfoRequest):
         '  "airportName": string,\n'
         '  "travelType": string (either "arrival" or "departure"),\n'
         '  "travelDate": string,\n'
+        '  "buyer_phone": string,\n'
         '  "passengerCount": number,\n'
         '  "flightNumber": string,\n'
         '  "passengers": [\n'
@@ -43,6 +44,7 @@ async def call_openai(messages: ExtractInfoRequest):
         "If the flight number contains letters that were spoken or written using Persian letters (e.g., 'کیو آر'), convert them to English Latin letters (e.g., 'QR'). Also normalize any Persian/Arabic digits to Western digits. Return the normalized flight number (uppercase, no spaces or hyphens).\n"
         "For passenger names (name and lastName), if they are provided in Persian/Farsi, convert them to English transliteration using standard Persian-to-Latin transliteration rules.\n"
         "For nationality field, valid values are: 'ایرانی' (Iranian), 'غیر ایرانی' (Non-Iranian), 'دپلمات' (Diplomat). Convert Persian values to English equivalents: 'ایرانی' -> 'Iranian', 'غیر ایرانی' -> 'Non-Iranian', 'دپلمات' -> 'Diplomat'.\n"
+        "For buyer_phone (contact phone for the whole trip), normalize by converting Persian/Arabic digits to Western digits and removing all spaces.\n"
         "If any field is missing, use an empty string or 0. Only return the JSON object, nothing else.\n\n"
         "Conversation:\n"
         + "\n".join(f"{m.sender}: {m.text}" for m in messages.messages)
@@ -179,6 +181,42 @@ async def call_openai(messages: ExtractInfoRequest):
                     # Remove all spaces and normalize
                     return value.replace(" ", "").strip()
 
+                # Normalize buyer phone: convert Persian/Arabic digits, remove spaces/hyphens, keep leading '+' if present
+                def normalize_buyer_phone(value: str) -> str:
+                    if not isinstance(value, str):
+                        return ""
+                    digit_map = str.maketrans(
+                        {
+                            "۰": "0",
+                            "۱": "1",
+                            "۲": "2",
+                            "۳": "3",
+                            "۴": "4",
+                            "۵": "5",
+                            "۶": "6",
+                            "۷": "7",
+                            "۸": "8",
+                            "۹": "9",
+                            "٠": "0",
+                            "١": "1",
+                            "٢": "2",
+                            "٣": "3",
+                            "٤": "4",
+                            "٥": "5",
+                            "٦": "6",
+                            "٧": "7",
+                            "٨": "8",
+                            "٩": "9",
+                        }
+                    )
+                    normalized = value.translate(digit_map)
+                    # Preserve leading '+' if exists
+                    leading_plus = normalized.strip().startswith("+")
+                    normalized = normalized.replace(" ", "").replace("-", "")
+                    if leading_plus and not normalized.startswith("+"):
+                        normalized = "+" + normalized.lstrip("+")
+                    return normalized
+
                 # Normalize nationality: convert Persian to English equivalents
                 def normalize_nationality(value: str) -> str:
                     if not isinstance(value, str):
@@ -199,6 +237,11 @@ async def call_openai(messages: ExtractInfoRequest):
                     return normalize_name(value)
 
                 if isinstance(extracted, dict):
+                    # Normalize buyer_phone if present
+                    if "buyer_phone" in extracted:
+                        extracted["buyer_phone"] = normalize_buyer_phone(
+                            extracted.get("buyer_phone", "")
+                        )
                     if "flightNumber" in extracted:
                         extracted["flightNumber"] = normalize_flight_number(
                             extracted.get("flightNumber", "")
@@ -331,6 +374,40 @@ async def call_openai(messages: ExtractInfoRequest):
                             return ""
                         return value.replace(" ", "").strip()
 
+                    def normalize_buyer_phone(value: str) -> str:
+                        if not isinstance(value, str):
+                            return ""
+                        digit_map = str.maketrans(
+                            {
+                                "۰": "0",
+                                "۱": "1",
+                                "۲": "2",
+                                "۳": "3",
+                                "۴": "4",
+                                "۵": "5",
+                                "۶": "6",
+                                "۷": "7",
+                                "۸": "8",
+                                "۹": "9",
+                                "٠": "0",
+                                "١": "1",
+                                "٢": "2",
+                                "٣": "3",
+                                "٤": "4",
+                                "٥": "5",
+                                "٦": "6",
+                                "٧": "7",
+                                "٨": "8",
+                                "٩": "9",
+                            }
+                        )
+                        normalized = value.translate(digit_map)
+                        leading_plus = normalized.strip().startswith("+")
+                        normalized = normalized.replace(" ", "").replace("-", "")
+                        if leading_plus and not normalized.startswith("+"):
+                            normalized = "+" + normalized.lstrip("+")
+                        return normalized
+
                     def normalize_nationality(value: str) -> str:
                         if not isinstance(value, str):
                             return ""
@@ -350,6 +427,10 @@ async def call_openai(messages: ExtractInfoRequest):
                         return normalize_name(value)
 
                     if isinstance(extracted, dict):
+                        if "buyer_phone" in extracted:
+                            extracted["buyer_phone"] = normalize_buyer_phone(
+                                extracted.get("buyer_phone", "")
+                            )
                         if "flightNumber" in extracted:
                             extracted["flightNumber"] = normalize_flight_number(
                                 extracted.get("flightNumber", "")
