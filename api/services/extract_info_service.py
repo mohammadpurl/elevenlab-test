@@ -23,7 +23,7 @@ async def call_openai(messages: ExtractInfoRequest):
         '  "airportName": string,\n'
         '  "travelType": string (either "arrival" or "departure"),\n'
         '  "travelDate": string,\n'
-        '  "buyer_phone": string,\n'
+        '  "buyer_Phone": string,\n'
         '  "passengerCount": number,\n'
         '  "flightNumber": string,\n'
         '  "passengers": [\n'
@@ -44,7 +44,7 @@ async def call_openai(messages: ExtractInfoRequest):
         "If the flight number contains letters that were spoken or written using Persian letters (e.g., 'کیو آر'), convert them to English Latin letters (e.g., 'QR'). Also normalize any Persian/Arabic digits to Western digits. Return the normalized flight number (uppercase, no spaces or hyphens).\n"
         "For passenger names (name and lastName), if they are provided in Persian/Farsi, convert them to English transliteration using standard Persian-to-Latin transliteration rules.\n"
         "For nationality field, valid values are: 'ایرانی' (Iranian), 'غیر ایرانی' (Non-Iranian), 'دپلمات' (Diplomat). Convert Persian values to English equivalents: 'ایرانی' -> 'Iranian', 'غیر ایرانی' -> 'Non-Iranian', 'دپلمات' -> 'Diplomat'.\n"
-        "For buyer_phone (contact phone for the whole trip), normalize by converting Persian/Arabic digits to Western digits and removing all spaces.\n"
+        "For buyer_Phone (contact phone for the whole trip), normalize by converting Persian/Arabic digits to Western digits and removing all spaces.\n"
         "If any field is missing, use an empty string or 0. Only return the JSON object, nothing else.\n\n"
         "Conversation:\n"
         + "\n".join(f"{m.sender}: {m.text}" for m in messages.messages)
@@ -295,16 +295,16 @@ async def call_openai(messages: ExtractInfoRequest):
                     return ""
 
                 if isinstance(extracted, dict):
-                    # Normalize buyer_phone if present
-                    if "buyer_phone" in extracted:
-                        extracted["buyer_phone"] = normalize_buyer_phone(
-                            extracted.get("buyer_phone", "")
+                    # Normalize buyer_Phone if present
+                    if "buyer_Phone" in extracted:
+                        extracted["buyer_Phone"] = normalize_buyer_phone(
+                            extracted.get("buyer_Phone", "")
                         )
                     # If still empty, try to detect from conversation
-                    if not extracted.get("buyer_phone"):
+                    if not extracted.get("buyer_Phone"):
                         auto_phone = find_buyer_phone_from_conversation()
                         if auto_phone:
-                            extracted["buyer_phone"] = auto_phone
+                            extracted["buyer_Phone"] = auto_phone
                     if "flightNumber" in extracted:
                         extracted["flightNumber"] = normalize_flight_number(
                             extracted.get("flightNumber", "")
@@ -490,10 +490,75 @@ async def call_openai(messages: ExtractInfoRequest):
                         return normalize_name(value)
 
                     if isinstance(extracted, dict):
-                        if "buyer_phone" in extracted:
-                            extracted["buyer_phone"] = normalize_buyer_phone(
-                                extracted.get("buyer_phone", "")
+                        if "buyer_Phone" in extracted:
+                            extracted["buyer_Phone"] = normalize_buyer_phone(
+                                extracted.get("buyer_Phone", "")
                             )
+                        # If still empty, try to detect from conversation
+                        if not extracted.get("buyer_Phone"):
+                            # Try to infer from conversation text
+                            def find_buyer_phone_from_conversation_fallback() -> str:
+                                digit_map = str.maketrans(
+                                    {
+                                        "۰": "0",
+                                        "۱": "1",
+                                        "۲": "2",
+                                        "۳": "3",
+                                        "۴": "4",
+                                        "۵": "5",
+                                        "۶": "6",
+                                        "۷": "7",
+                                        "۸": "8",
+                                        "۹": "9",
+                                        "٠": "0",
+                                        "١": "1",
+                                        "٢": "2",
+                                        "٣": "3",
+                                        "٤": "4",
+                                        "٥": "5",
+                                        "٦": "6",
+                                        "٧": "7",
+                                        "٨": "8",
+                                        "٩": "9",
+                                    }
+                                )
+                                candidates: list[str] = []
+                                import re
+
+                                for m in messages.messages:
+                                    text_line = getattr(m, "text", "") or ""
+                                    s = str(text_line).translate(digit_map)
+                                    for match_phone in re.findall(
+                                        r"\+?[\d\s\-]{9,20}", s
+                                    ):
+                                        normalized_phone = normalize_buyer_phone(
+                                            match_phone
+                                        )
+                                        digits_only = normalized_phone.lstrip("+")
+                                        if (
+                                            digits_only.isdigit()
+                                            and 10 <= len(digits_only) <= 15
+                                        ):
+                                            candidates.append(normalized_phone)
+                                if candidates:
+                                    candidates.sort(
+                                        key=lambda x: (
+                                            x.startswith("+98")
+                                            or x.lstrip("+").startswith("0098")
+                                            or x.lstrip("+").startswith("98")
+                                            or x.lstrip("+").startswith("09"),
+                                            len(x),
+                                        ),
+                                        reverse=True,
+                                    )
+                                    return candidates[0]
+                                return ""
+
+                            auto_phone_fb = (
+                                find_buyer_phone_from_conversation_fallback()
+                            )
+                            if auto_phone_fb:
+                                extracted["buyer_Phone"] = auto_phone_fb
                         if "flightNumber" in extracted:
                             extracted["flightNumber"] = normalize_flight_number(
                                 extracted.get("flightNumber", "")
