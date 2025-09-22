@@ -44,7 +44,7 @@ If the user requests VIP or CIP services, I ask for the following information in
 4. Number of passengers
 5. Need for special services like wheelchair, pet, or Home Check-in
 6. Need for transfer (van, Iranian car, VIP)
-7. User contact information (mobile number, WhatsApp, or phone)
+7. User contact information (mobile number, WhatsApp, or phone) — Always collect and validate a contact phone number. If it hasn't been provided during the conversation, ask for it before showing the final summary. Prefer asking early (after base info or when starting passenger info).
 
 After receiving all information completely, a final confirmation message is displayed and then a **QR code for confirming the received information and payment** will be provided.
 
