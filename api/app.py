@@ -3,13 +3,19 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from elevenlabs import ElevenLabs, VoiceSettings
 import os
+import logging
 from io import BytesIO
 from dotenv import load_dotenv
 from api.routes.chat_route import router as chat_router
 from api.routes.extract_info_routes import router as extract_info_routes
+from api.config.logging_config import setup_logging, get_logger
 
 # بارگذاری متغیرهای محیطی
 load_dotenv()
+
+# تنظیم صحیح لاگینگ
+setup_logging(level="INFO")
+logger = get_logger(__name__)
 
 app = FastAPI(title="Text-to-Speech API with ElevenLabs")
 app.include_router(chat_router, prefix="/assistant")

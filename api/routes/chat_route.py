@@ -2,14 +2,23 @@ from fastapi import APIRouter, HTTPException
 from api.schemas.chat_schema import ChatRequest, ChatResponse, Message
 
 from api.services.openai_service import OpenAIService
+from api.config.logging_config import get_logger
 import os
-import logging
 
 # تنظیم لاگر
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter()
+
+# ایجاد یک instance مشترک از OpenAI Service برای بهبود عملکرد
+_openai_service = None
+
+
+def get_openai_service():
+    global _openai_service
+    if _openai_service is None:
+        _openai_service = OpenAIService()
+    return _openai_service
 
 
 def get_openai_api_key():
@@ -32,13 +41,14 @@ def test():
 def chat(request: ChatRequest):
     logger.info(f"Chat endpoint called with message: {request.message}")
 
-    openai_service = OpenAIService()
     api_key = get_openai_api_key()
-
     if not api_key:
         raise HTTPException(status_code=401, detail="OpenAI API key is not set")
 
     try:
+        # استفاده از instance مشترک برای بهبود عملکرد
+        openai_service = get_openai_service()
+
         # گرفتن پیام‌ها از OpenAI با session_id
         logger.info("Getting response from OpenAI")
         session_id = getattr(request, "session_id", None)
@@ -70,7 +80,7 @@ def health():
 def get_memory(session_id: str):
     """Get conversation history for a session"""
     try:
-        openai_service = OpenAIService()
+        openai_service = get_openai_service()
         history = openai_service.get_conversation_history(session_id)
         logger.info(
             f"Memory endpoint called for session {session_id}, found {len(history)} messages"
@@ -85,7 +95,7 @@ def get_memory(session_id: str):
 def clear_memory(session_id: str):
     """Clear conversation history for a session"""
     try:
-        openai_service = OpenAIService()
+        openai_service = get_openai_service()
         openai_service.clear_memory(session_id)
         return {"message": f"Memory cleared for session: {session_id}"}
     except Exception as e:

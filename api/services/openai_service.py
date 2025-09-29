@@ -5,6 +5,7 @@ import requests
 import uuid
 from typing import List, Dict, Optional
 from datetime import datetime
+from api.config.performance_config import cache_manager, PerformanceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 class AgentMemory:
     """Memory system for the agent to maintain conversation history"""
 
-    def __init__(self, max_messages: int = 20):
-        self.max_messages = max_messages
+    def __init__(self, max_messages: int = None):
+        self.max_messages = max_messages or PerformanceConfig.MAX_MEMORY_MESSAGES
         self.conversations: Dict[str, List[Dict]] = {}
 
     def add_message(self, session_id: str, role: str, content: str):
@@ -75,14 +76,34 @@ class OpenAIService:
             "Content-Type": "application/json",
         }
 
-        # Load knowledge base based on language
+        # Load knowledge base based on language with caching
         knowledge_base_file = (
             "api/constants/knowledge_base_en.txt"
             if language == "en"
             else "api/constants/knowledge_base.txt"
         )
-        with open(knowledge_base_file, "r", encoding="utf-8") as f:
-            knowledge_base = f.read()
+
+        # استفاده از کش برای جلوگیری از خواندن مکرر فایل
+        cache_key = f"knowledge_base_{language}"
+        knowledge_base = cache_manager.get(cache_key)
+
+        if knowledge_base is None:
+            try:
+                with open(knowledge_base_file, "r", encoding="utf-8") as f:
+                    knowledge_base = f.read()
+                    cache_manager.set(
+                        cache_key,
+                        knowledge_base,
+                        PerformanceConfig.KNOWLEDGE_BASE_CACHE_TTL,
+                    )
+            except FileNotFoundError:
+                logger.error(f"Knowledge base file not found: {knowledge_base_file}")
+                knowledge_base = ""
+                cache_manager.set(
+                    cache_key,
+                    knowledge_base,
+                    PerformanceConfig.KNOWLEDGE_BASE_CACHE_TTL,
+                )
 
         # Create intelligent system prompt that lets AI handle everything
         if language == "en":
@@ -207,10 +228,12 @@ Always respond with a JSON array of messages. If your reply has multiple sentenc
         messages += self.memory.get_conversation_history(session_id)
         messages.append({"role": "user", "content": user_message})
 
+        # استفاده از تنظیمات بهینه‌سازی
+        openai_config = PerformanceConfig.get_openai_config()
         payload = {
             "model": "gpt-4o",
-            "max_tokens": 2000,
-            "temperature": 0.7,
+            "max_tokens": openai_config["max_tokens"],
+            "temperature": openai_config["temperature"],
             "response_format": {"type": "json_object"},
             "messages": messages,
         }
@@ -221,7 +244,7 @@ Always respond with a JSON array of messages. If your reply has multiple sentenc
                 self.api_url,
                 headers=headers,
                 json=payload,
-                timeout=60,
+                timeout=openai_config["timeout"],
             )
             response.raise_for_status()
 
