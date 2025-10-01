@@ -47,6 +47,7 @@ class ExtractInfoResponse(BaseModel):
     passengerCount: int
     flightNumber: str
     passengers: List[Passenger]
+    buyer_Phone: Optional[str] = None
     additionalInfo: Optional[str] = None
 
 
