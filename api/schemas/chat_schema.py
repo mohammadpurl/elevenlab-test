@@ -17,5 +17,5 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    messages: List[Message]
+    messages: Message
     session_id: Optional[str] = None

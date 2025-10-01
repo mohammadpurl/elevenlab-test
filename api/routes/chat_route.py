@@ -60,10 +60,27 @@ def chat(request: ChatRequest):
             f"[OpenAI] returned {len(openai_messages)} messages for session: {session_id}"
         )
 
-        # اضافه کردن session_id به پاسخ
-        response = ChatResponse(messages=openai_messages)
-        response.session_id = session_id
-        return response
+        # ترکیب همه پیام‌ها در یک متن واحد
+        try:
+            texts = []
+            if isinstance(openai_messages, list):
+                for m in openai_messages:
+                    text = m.get("text") if isinstance(m, dict) else None
+                    if text:
+                        texts.append(str(text))
+            elif isinstance(openai_messages, dict) and "text" in openai_messages:
+                texts.append(str(openai_messages["text"]))
+
+            combined_text = "\n".join(texts) if texts else ""
+
+            # ساخت پاسخ با یک پیام واحد
+            single_message = Message(text=combined_text)
+            response = ChatResponse(messages=single_message)
+            response.session_id = session_id
+            return response
+        except Exception as combine_error:
+            logger.error(f"Error combining messages: {combine_error}")
+            raise HTTPException(status_code=500, detail="Failed to combine messages")
 
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")
