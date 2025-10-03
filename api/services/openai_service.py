@@ -91,6 +91,32 @@ class OpenAIService:
             try:
                 with open(knowledge_base_file, "r", encoding="utf-8") as f:
                     knowledge_base = f.read()
+                # تلاش برای افزودن محتوای فایل اکسل نکسا به انتهای بانک دانش
+                try:
+                    from openpyxl import load_workbook
+
+                    xlsx_path = "api/constants/نکسا.xlsx"
+                    if os.path.exists(xlsx_path):
+                        wb = load_workbook(filename=xlsx_path, data_only=True)
+                        excel_text_parts: List[str] = []
+                        for sheet in wb.sheetnames:
+                            ws = wb[sheet]
+                            excel_text_parts.append(f"\n---\n[EXCEL:{sheet}]\n")
+                            for row in ws.iter_rows(values_only=True):
+                                # Join non-empty cells with tabs
+                                cells = [
+                                    str(c).strip()
+                                    for c in row
+                                    if c is not None and str(c).strip() != "None"
+                                ]
+                                if cells:
+                                    excel_text_parts.append("\t".join(cells))
+                        if excel_text_parts:
+                            knowledge_base = (
+                                knowledge_base + "\n\n" + "\n".join(excel_text_parts)
+                            )
+                except Exception as _excel_err:
+                    logger.warning(f"Failed to append Excel knowledge: {_excel_err}")
                     cache_manager.set(
                         cache_key,
                         knowledge_base,
@@ -108,7 +134,7 @@ class OpenAIService:
         # Create intelligent system prompt that lets AI handle everything
         if language == "en":
             system_prompt = f"""
-You are an AI assistant named "Binad" who provides airport services at Imam Khomeini and Mashhad airports.
+You are an AI assistant named "Nexa" who provides airport services at Imam Khomeini and Mashhad airports.
 
 # Your Intelligence:
 You are INTELLIGENT and can handle complex conversations on your own. You don't need step-by-step instructions - you understand the logic and can make decisions.
@@ -160,6 +186,7 @@ Always respond with a JSON array of messages. If your reply has multiple sentenc
 - Be conversational and helpful
 - Maximum 3 sentences per response
 - Choose facialExpression contextually: e.g., smile for greetings/thanks/good news, sad for apologies/errors, angry only for severe policy violations, surprised for unexpected events, funnyFace for light humor; use default when neutral. If multiple sentences differ in tone, split into multiple messages and set expressions per sentence.
+- If the user asks for a joke or tells a joke, reply briefly and set facialExpression to "funnyFace" or animation to "Laughing" as appropriate. Keep it friendly and short.
 - Always collect a valid contact phone number before finalizing the booking, and prefer asking for it early (after base info or when starting passenger details). If not provided yet, explicitly ask before final summary.
 - Ignore spaces in national ID, phone numbers, and passport numbers - they are acceptable
 - Do not ask users to re-enter numbers if they contain spaces
@@ -186,7 +213,7 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
             """
         else:
             system_prompt = f"""
-تو یک دستیار هوش مصنوعی به نام «بیناد» هستی که خدمات فرودگاهی در فرودگاه امام خمینی و مشهد را ارائه می‌دهی.
+تو یک دستیار هوش مصنوعی به نام «نکسا» هستی که خدمات فرودگاهی در فرودگاه امام خمینی و مشهد را ارائه می‌دهی.
 
 # هوش تو:
 تو **هوشمند** هستی و می‌توانی مکالمات پیچیده را خودت هندل کنی. نیازی به دستورالعمل‌های مرحله‌به‌مرحله نیست - تو منطق را درک می‌کنی و می‌توانی تصمیم‌گیری کنی.
@@ -238,6 +265,7 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
 - محاوره‌ای و مفید باش
 - حداکثر ۳ جمله در هر پاسخ
 - «facialExpression» را متناسب با لحن هر جمله انتخاب کن: لبخند برای خوش‌آمد/قدردانی/خبر خوب، ناراحت برای عذرخواهی/خطا، عصبانی فقط برای نقض شدید قوانین، متعجب برای موارد غیرمنتظره، و «funnyFace» برای شوخی سبک؛ در حالت خنثی «default». اگر چند جمله با لحن متفاوت داری، آن‌ها را به چند پیام جدا تقسیم کن و برای هر پیام «facialExpression» مناسب بگذار.
+- اگر کاربر جوک خواست یا خودش جوک گفت، پاسخ کوتاه و محترمانه بده و «facialExpression» را «funnyFace» و در صورت مناسب «animation» را «Laughing» قرار بده.
 - قبل از نهایی‌سازی رزرو، حتماً شماره تماس معتبر دریافت کن و ترجیحاً زودهنگام (بعد از اطلاعات پایه یا ابتدای ورود به اطلاعات مسافر) بپرس. اگر هنوز دریافت نشده، قبل از نمایش خلاصه نهایی به‌طور صریح سؤال کن.
 - فاصله در کد ملی، شماره تلفن و شماره گذرنامه قابل قبول است - از آن چشم‌پوشی کن
 - اگر شماره‌ها فاصله دارند، از کاربر نخواه دوباره وارد کند

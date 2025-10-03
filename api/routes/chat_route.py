@@ -73,10 +73,7 @@ def chat(request: ChatRequest):
 
             combined_text = "\n".join(texts) if texts else ""
 
-            # ساخت پاسخ با یک پیام واحد
-            single_message = Message(text=combined_text)
-            response = ChatResponse(messages=single_message)
-            response.session_id = session_id
+            response = ChatResponse(message=combined_text, session_id=session_id)
             return response
         except Exception as combine_error:
             logger.error(f"Error combining messages: {combine_error}")
