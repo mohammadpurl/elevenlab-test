@@ -6,8 +6,8 @@ class Message(BaseModel):
     text: str
     # audio: Optional[str] = None  # base64 encoded
     # lipsync: Optional[Dict[str, Any]] = None
-    facialExpression: Optional[str] = None
-    animation: Optional[str] = None
+    # facialExpression: str
+    # animation: str
 
 
 class ChatRequest(BaseModel):
@@ -17,5 +17,5 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    message: str
+    messages: Message
     session_id: Optional[str] = None
