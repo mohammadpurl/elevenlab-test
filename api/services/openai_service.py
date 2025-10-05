@@ -6,6 +6,7 @@ import uuid
 from typing import List, Dict, Optional
 from datetime import datetime
 from api.config.performance_config import cache_manager, PerformanceConfig
+from api.services.animation_service import animation_selector
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +225,9 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
     {{
       "text": "پیام تو اینجا",
       "facialExpression": "smile|sad|angry|surprised|funnyFace|default",
-      "animation": "Talking_0|Talking_1|Talking_2|Crying|Laughing|Rumba|Idle|Terrified|Angry"
+    #   "animation": "Talking_0|Talking_1|Talking_2|Crying|Laughing|Rumba|Idle|Terrified|Angry"
+      "animation": "StandingIdle | StandingGreeting | ThumbsUp | Pointing | Talking | Clapping | ThoughtfulHead | Bow | Laughing | Thankful | Thinking"
+
     }}
   ]
 }}
@@ -303,24 +306,56 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                 if isinstance(response_data, dict) and "messages" in response_data:
                     messages = response_data["messages"]
                     if isinstance(messages, list) and len(messages) > 0:
+                        # Process each message and add intelligent animation selection
+                        processed_messages = []
                         for msg in messages:
                             if "text" in msg:
+                                # Add to memory
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
-                        return messages, session_id
+
+                                # Create processed message with intelligent animation
+                                processed_msg = {
+                                    "text": msg["text"],
+                                    "facialExpression": msg.get(
+                                        "facialExpression", "default"
+                                    ),
+                                    "animation": self._select_animation_for_message(
+                                        msg["text"], language
+                                    ),
+                                }
+                                processed_messages.append(processed_msg)
+
+                        return processed_messages, session_id
                     else:
                         raise ValueError("Messages array is empty or invalid")
 
                 # If response is directly an array
                 elif isinstance(response_data, list):
                     if len(response_data) > 0:
+                        # Process each message and add intelligent animation selection
+                        processed_messages = []
                         for msg in response_data:
                             if "text" in msg:
+                                # Add to memory
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
-                        return response_data, session_id
+
+                                # Create processed message with intelligent animation
+                                processed_msg = {
+                                    "text": msg["text"],
+                                    "facialExpression": msg.get(
+                                        "facialExpression", "default"
+                                    ),
+                                    "animation": self._select_animation_for_message(
+                                        msg["text"], language
+                                    ),
+                                }
+                                processed_messages.append(processed_msg)
+
+                        return processed_messages, session_id
                     else:
                         raise ValueError("Response array is empty")
 
@@ -342,7 +377,9 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                     {
                         "text": error_message,
                         "facialExpression": "sad",
-                        "animation": "Idle",
+                        "animation": self._select_animation_for_message(
+                            error_message, language
+                        ),
                     }
                 ], session_id
             except Exception as e:
@@ -357,7 +394,9 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                     {
                         "text": error_message,
                         "facialExpression": "sad",
-                        "animation": "Idle",
+                        "animation": self._select_animation_for_message(
+                            error_message, language
+                        ),
                     }
                 ], session_id
 
@@ -372,3 +411,20 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
         history = self.memory.get_conversation_history(session_id)
         logger.info(f"Retrieved {len(history)} messages for session {session_id}")
         return history
+
+    def _select_animation_for_message(self, text: str, language: str = "fa") -> str:
+        """
+        Select the most appropriate animation for a message based on its content
+
+        Args:
+            text: The message text
+            language: Language code ("fa" for Persian, "en" for English)
+
+        Returns:
+            Selected animation name
+        """
+        try:
+            return animation_selector.select_animation(text, language)
+        except Exception as e:
+            logger.warning(f"Error selecting animation for text '{text[:50]}...': {e}")
+            return "StandingIdle"  # Default fallback

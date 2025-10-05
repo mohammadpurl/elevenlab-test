@@ -4,10 +4,10 @@ from typing import List, Optional, Dict, Any
 
 class Message(BaseModel):
     text: str
+    facialExpression: Optional[str] = "default"
+    animation: Optional[str] = "StandingIdle"
     # audio: Optional[str] = None  # base64 encoded
     # lipsync: Optional[Dict[str, Any]] = None
-    # facialExpression: str
-    # animation: str
 
 
 class ChatRequest(BaseModel):

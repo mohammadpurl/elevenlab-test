@@ -63,17 +63,35 @@ def chat(request: ChatRequest):
         # تبدیل پاسخ‌ها به یک Message object
         try:
             combined_text = ""
+            combined_facial_expression = "default"
+            combined_animation = "StandingIdle"
+
             if isinstance(openai_messages, list):
                 for m in openai_messages:
                     text = m.get("text") if isinstance(m, dict) else None
                     if text:
                         combined_text += str(text) + "\n"
+                        # Use the facial expression and animation from the first message
+                        if combined_facial_expression == "default" and m.get(
+                            "facialExpression"
+                        ):
+                            combined_facial_expression = m.get("facialExpression")
+                        if combined_animation == "StandingIdle" and m.get("animation"):
+                            combined_animation = m.get("animation")
             elif isinstance(openai_messages, dict) and "text" in openai_messages:
                 combined_text = str(openai_messages["text"])
+                combined_facial_expression = openai_messages.get(
+                    "facialExpression", "default"
+                )
+                combined_animation = openai_messages.get("animation", "StandingIdle")
 
             combined_text = combined_text.strip()
 
-            message_obj = Message(text=combined_text)
+            message_obj = Message(
+                text=combined_text,
+                facialExpression=combined_facial_expression,
+                animation=combined_animation,
+            )
             response = ChatResponse(messages=message_obj, session_id=session_id)
             return response
         except Exception as combine_error:
