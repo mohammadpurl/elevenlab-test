@@ -84,7 +84,6 @@ class OpenAIService:
             else "api/constants/knowledge_base.txt"
         )
 
-        # استفاده از کش برای جلوگیری از خواندن مکرر فایل
         cache_key = f"knowledge_base_{language}"
         knowledge_base = cache_manager.get(cache_key)
 
@@ -105,6 +104,34 @@ class OpenAIService:
                     knowledge_base,
                     PerformanceConfig.KNOWLEDGE_BASE_CACHE_TTL,
                 )
+
+        # Define location keywords for detection
+        location_keywords = {
+            "en": {
+                "call center": ["call center", "contact center", "help desk"],
+                "prayer room": ["prayer room", "chapel", "mosque"],
+                "restroom": ["restroom", "bathroom", "toilet", "washroom"],
+                "shop": ["shop", "store", "retail", "gift shop"],
+                "smoking room": ["smoking room", "smoking area", "smoking lounge"],
+                "transit lounge": ["transit lounge", "lounge", "waiting area"],
+            },
+            "fa": {
+                "کال سنتر": ["کال سنتر", "مرکز تماس", "پشتیبانی"],
+                "نمازخانه": ["نمازخانه", "محل عبادت"],
+                "سرویس بهداشتی": ["سرویس بهداشتی", "دستشویی", "توالت"],
+                "فروشگاه": ["فروشگاه", "مغازه"],
+                "اتاق سیگار": ["اتاق سیگار", "محل سیگار", "اتاق کشیدن سیگار"],
+                "سالن ترانزیت": ["سالن ترانزیت", "سالن انتظار", "لانج ترانزیت"],
+            },
+        }
+
+        # Detect location in user message
+        user_message_lower = user_message.lower() if language == "en" else user_message
+        selected_location = None
+        for location, keywords in location_keywords[language].items():
+            if any(keyword in user_message_lower for keyword in keywords):
+                selected_location = location
+                break
 
         # Create intelligent system prompt that lets AI handle everything
         if language == "en":
@@ -169,10 +196,10 @@ Always respond with a JSON array of messages. If your reply has multiple sentenc
 - ALWAYS end conversations by asking: "If you have any additional information, please provide it"
 - Record any additional information provided by the user
 - ALWAYS inform users: "A QR code will be displayed to you, and by scanning it you can edit your information and proceed to the next steps"
-- If user asks about location/cal center: Show QR code and say "To access the desired location, scan the QR code and after installing the app as a guest or by registering, log in, then scan the QR code again and reach your destination according to the specified route"
+- If user asks about the location of the call center, prayer room, restroom, shop, smoking room, or transit lounge: Show QR code and say "To access the {selected_location if selected_location else 'requested location'}, scan the QR code and after installing the app as a guest or by registering, log in, then scan the QR code again and reach your destination according to the specified route"
 
 # Finalization Behavior:
-When and only when all required fields are collected and confirmed, your last message before showing the QR code must tell the user that all information has been saved successfully and that they can view and confirm via QR code. In Farsi sessions you MUST include the exact sentence later specified in the Farsi prompt.
+When and only when all required fields are collected and confirmed, your last message before showing the QR code must tell the user that all information has been saved successfully and that they can view and confirm via QR code.
 
 # Travel Guide Mode (General Questions):
 If the user asks about city/country attractions, culture, itineraries, food, transport, or best times to visit, switch to Travel Guide Mode:
@@ -225,9 +252,7 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
     {{
       "text": "پیام تو اینجا",
       "facialExpression": "smile|sad|angry|surprised|funnyFace|default",
-    #   "animation": "Talking_0|Talking_1|Talking_2|Crying|Laughing|Rumba|Idle|Terrified|Angry"
       "animation": "StandingIdle | StandingGreeting | ThumbsUp | Pointing | Talking | Clapping | ThoughtfulHead | Bow | Laughing | Thankful | Thinking"
-
     }}
   ]
 }}
@@ -248,8 +273,8 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
 - اگر پاسخ بعد از ۲ بار نادرست بود، بگو "اشکال ندارد، می‌توانی آن را در فرم نهایی اصلاح کنی"
 - همیشه پایان گفتگو را با این سوال تمام کن: "اگر توضیح اضافه‌ای دارید بفرمایید"
 - هر توضیح اضافی که کاربر ارائه داد را ثبت کن
-- همیشه به کاربر بگو: "کیو آر کد خیلی به شما نمایش داده می‌شود و با اسکن آن می‌توانید اطلاعات خود را ویرایش کنید و به مراحل بعدی بروید"
-- اگر کاربر از مکان کال سنتر پرسید: کیو آر کد نشان بده و بگو "برای دسترسی به لوکیشن مورد نظر، کیو آر کد را اسکن کرده و پس از نصب برنامه بصورت میهمان و یا با ثبت نام، ورود کنید، سپس مجدد کیو آر کد را اسکن کرده و باتوجه به مسیر مشخص شده به مقصد برسید"
+- همیشه به کاربر بگو: "کیو آر کد به شما نمایش داده می‌شود و با اسکن آن می‌توانید اطلاعات خود را ویرایش کنید و به مراحل بعدی بروید"
+- اگر کاربر از مکان کال سنتر، نمازخانه، سرویس بهداشتی، فروشگاه، اتاق سیگار یا سالن ترانزیت پرسید: کیو آر کد نشان بده و بگو "برای دسترسی به {selected_location if selected_location else 'مکان مورد نظر'}، کیو آر کد را اسکن کرده و پس از نصب برنامه بصورت میهمان یا با ثبت نام، ورود کنید، سپس مجدد کیو آر کد را اسکن کرده و باتوجه به مسیر مشخص شده به مقصد برسید"
 
 # رفتار نهایی:
 وقتی و فقط وقتی همه اقلام الزامی جمع‌آوری و تأیید شد، در آخرین پیام قبل از نمایش کیو آر کد، حتماً این جمله را دقیقاً بگو:
@@ -272,7 +297,6 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
         messages += self.memory.get_conversation_history(session_id)
         messages.append({"role": "user", "content": user_message})
 
-        # استفاده از تنظیمات بهینه‌سازی
         openai_config = PerformanceConfig.get_openai_config()
         payload = {
             "model": "gpt-4o",
@@ -302,20 +326,15 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                 # Add messages to memory
                 self.memory.add_message(session_id, "user", user_message)
 
-                # If response includes "messages" key
                 if isinstance(response_data, dict) and "messages" in response_data:
                     messages = response_data["messages"]
                     if isinstance(messages, list) and len(messages) > 0:
-                        # Process each message and add intelligent animation selection
                         processed_messages = []
                         for msg in messages:
                             if "text" in msg:
-                                # Add to memory
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
-
-                                # Create processed message with intelligent animation
                                 processed_msg = {
                                     "text": msg["text"],
                                     "facialExpression": msg.get(
@@ -326,24 +345,18 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                     ),
                                 }
                                 processed_messages.append(processed_msg)
-
                         return processed_messages, session_id
                     else:
                         raise ValueError("Messages array is empty or invalid")
 
-                # If response is directly an array
                 elif isinstance(response_data, list):
                     if len(response_data) > 0:
-                        # Process each message and add intelligent animation selection
                         processed_messages = []
                         for msg in response_data:
                             if "text" in msg:
-                                # Add to memory
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
-
-                                # Create processed message with intelligent animation
                                 processed_msg = {
                                     "text": msg["text"],
                                     "facialExpression": msg.get(
@@ -354,11 +367,9 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                     ),
                                 }
                                 processed_messages.append(processed_msg)
-
                         return processed_messages, session_id
                     else:
                         raise ValueError("Response array is empty")
-
                 else:
                     raise ValueError(
                         f"Unexpected response format: {type(response_data)}"
@@ -413,18 +424,8 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
         return history
 
     def _select_animation_for_message(self, text: str, language: str = "fa") -> str:
-        """
-        Select the most appropriate animation for a message based on its content
-
-        Args:
-            text: The message text
-            language: Language code ("fa" for Persian, "en" for English)
-
-        Returns:
-            Selected animation name
-        """
         try:
             return animation_selector.select_animation(text, language)
         except Exception as e:
             logger.warning(f"Error selecting animation for text '{text[:50]}...': {e}")
-            return "StandingIdle"  # Default fallback
+            return "StandingIdle"
