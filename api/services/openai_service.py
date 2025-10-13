@@ -125,12 +125,43 @@ class OpenAIService:
             },
         }
 
-        # Detect location in user message
-        user_message_lower = user_message.lower() if language == "en" else user_message
+        # Detect location in user message (robust normalization for FA)
+        def normalize_chars(text: str) -> str:
+            # Normalize Arabic/Persian variants and whitespace
+            replacements = {
+                "ي": "ی",
+                "ك": "ک",
+                "ۀ": "ه",
+                "ة": "ه",
+                "ؤ": "و",
+                "إ": "ا",
+                "أ": "ا",
+                "آ": "ا",
+                "‌": "",  # ZWNJ
+                "‏": "",  # RTL mark
+                "\u200c": "",  # explicit ZWNJ
+            }
+            for src, dst in replacements.items():
+                text = text.replace(src, dst)
+            # Collapse multiple spaces
+            return " ".join(text.strip().split())
+
+        if language == "en":
+            user_message_norm = user_message.lower()
+        else:
+            user_message_norm = normalize_chars(user_message)
+
+        user_message_no_space = user_message_norm.replace(" ", "")
+
         selected_location = None
         for location, keywords in location_keywords[language].items():
-            if any(keyword in user_message_lower for keyword in keywords):
-                selected_location = location
+            for kw in keywords:
+                kw_norm = kw.lower() if language == "en" else normalize_chars(kw)
+                kw_no_space = kw_norm.replace(" ", "")
+                if kw_norm in user_message_norm or kw_no_space in user_message_no_space:
+                    selected_location = location
+                    break
+            if selected_location:
                 break
 
         # Create intelligent system prompt that lets AI handle everything
