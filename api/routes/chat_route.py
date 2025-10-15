@@ -53,8 +53,10 @@ def chat(request: ChatRequest):
         logger.info("Getting response from OpenAI")
         session_id = getattr(request, "session_id", None)
         language = getattr(request, "language", "fa")
+        # Use a stable default session to avoid unintended restarts during testing
+        stable_session_id = session_id if session_id else "default"
         openai_messages, session_id = openai_service.get_assistant_response(
-            request.message, session_id if session_id else None, language
+            request.message, stable_session_id, language
         )
         logger.info(
             f"[OpenAI] returned {len(openai_messages)} messages for session: {session_id}"
