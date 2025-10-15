@@ -366,14 +366,13 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
+                                # Force fixed facial expression and animation for testing
                                 processed_msg = {
                                     "text": msg["text"],
-                                    "facialExpression": msg.get(
-                                        "facialExpression", "default"
-                                    ),
-                                    "animation": self._select_animation_for_message(
-                                        msg["text"], language
-                                    ),
+                                    # "facialExpression": msg.get("facialExpression", "default"),
+                                    "facialExpression": "default",
+                                    # "animation": self._select_animation_for_message(msg["text"], language),
+                                    "animation": "StandingIdle",
                                 }
                                 processed_messages.append(processed_msg)
                         return processed_messages, session_id
@@ -388,14 +387,13 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                 self.memory.add_message(
                                     session_id, "assistant", msg["text"]
                                 )
+                                # Force fixed facial expression and animation for testing
                                 processed_msg = {
                                     "text": msg["text"],
-                                    "facialExpression": msg.get(
-                                        "facialExpression", "default"
-                                    ),
-                                    "animation": self._select_animation_for_message(
-                                        msg["text"], language
-                                    ),
+                                    # "facialExpression": msg.get("facialExpression", "default"),
+                                    "facialExpression": "default",
+                                    # "animation": self._select_animation_for_message(msg["text"], language),
+                                    "animation": "StandingIdle",
                                 }
                                 processed_messages.append(processed_msg)
                         return processed_messages, session_id
@@ -418,10 +416,10 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                 return [
                     {
                         "text": error_message,
-                        "facialExpression": "sad",
-                        "animation": self._select_animation_for_message(
-                            error_message, language
-                        ),
+                        # "facialExpression": "sad",
+                        "facialExpression": "default",
+                        # "animation": self._select_animation_for_message(error_message, language),
+                        "animation": "StandingIdle",
                     }
                 ], session_id
             except Exception as e:
@@ -435,10 +433,10 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                 return [
                     {
                         "text": error_message,
-                        "facialExpression": "sad",
-                        "animation": self._select_animation_for_message(
-                            error_message, language
-                        ),
+                        # "facialExpression": "sad",
+                        "facialExpression": "default",
+                        # "animation": self._select_animation_for_message(error_message, language),
+                        "animation": "StandingIdle",
                     }
                 ], session_id
 
@@ -455,8 +453,10 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
         return history
 
     def _select_animation_for_message(self, text: str, language: str = "fa") -> str:
-        try:
-            return animation_selector.select_animation(text, language)
-        except Exception as e:
-            logger.warning(f"Error selecting animation for text '{text[:50]}...': {e}")
-            return "StandingIdle"
+        # Forced to StandingIdle for testing purposes
+        # try:
+        #     return animation_selector.select_animation(text, language)
+        # except Exception as e:
+        #     logger.warning(f"Error selecting animation for text '{text[:50]}...': {e}")
+        #     return "StandingIdle"
+        return "StandingIdle"
