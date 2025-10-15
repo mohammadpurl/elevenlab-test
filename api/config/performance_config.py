@@ -71,7 +71,7 @@ class PerformanceConfig:
     SESSION_CACHE_TTL = 1800  # 30 دقیقه
 
     # تنظیمات حافظه
-    MAX_MEMORY_MESSAGES = 20
+    MAX_MEMORY_MESSAGES = 200
     MAX_SESSIONS = 1000
 
     @classmethod
@@ -85,7 +85,7 @@ class PerformanceConfig:
 
 
 # تنظیمات محیطی
-def get_env_config() -> Dict[str, str]:
+def get_env_config() -> Dict[str, Any]:
     """دریافت تنظیمات محیطی"""
     return {
         "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
