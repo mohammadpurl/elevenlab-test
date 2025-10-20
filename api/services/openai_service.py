@@ -387,9 +387,6 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                     "animation": "StandingIdle",
                                 }
                                 processed_messages.append(processed_msg)
-                        # Optional: throw an exception before sending the response (for testing)
-                        if os.getenv("FORCE_RESPONSE_EXCEPTION") == "1":
-                            raise Exception("Forced exception before sending response")
                         return processed_messages, session_id
                     else:
                         raise ValueError("Messages array is empty or invalid")
@@ -411,9 +408,6 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                     "animation": "StandingIdle",
                                 }
                                 processed_messages.append(processed_msg)
-                        # Optional: throw an exception before sending the response (for testing)
-                        if os.getenv("FORCE_RESPONSE_EXCEPTION") == "1":
-                            raise Exception("Forced exception before sending response")
                         return processed_messages, session_id
                     else:
                         raise ValueError("Response array is empty")
