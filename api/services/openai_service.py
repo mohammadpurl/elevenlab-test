@@ -402,10 +402,14 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
                                 # Force fixed facial expression and animation for testing
                                 processed_msg = {
                                     "text": msg["text"],
-                                    # "facialExpression": msg.get("facialExpression", "default"),
-                                    "facialExpression": "default",
-                                    # "animation": self._select_animation_for_message(msg["text"], language),
-                                    "animation": "StandingIdle",
+                                    "facialExpression": msg.get(
+                                        "facialExpression", "default"
+                                    ),
+                                    # "facialExpression": "default",
+                                    "animation": self._select_animation_for_message(
+                                        msg["text"], language
+                                    ),
+                                    # "animation": "StandingIdle",
                                 }
                                 processed_messages.append(processed_msg)
                         return processed_messages, session_id
