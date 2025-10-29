@@ -3,7 +3,8 @@ import json
 import logging
 import requests
 import uuid
-from typing import List, Dict, Optional
+import re
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 from api.config.performance_config import cache_manager, PerformanceConfig
 from api.services.animation_service import animation_selector
@@ -64,6 +65,223 @@ class OpenAIService:
             self.memory = OpenAIService._memory
             self.booking_states: Dict[str, dict] = {}
             self.initialized = True
+
+    # --------------------
+    # Booking flow helpers
+    # --------------------
+    def _ordered_fields(self, language: str) -> List[Tuple[str, str]]:
+        """Return ordered booking fields as (key, human_label) per language."""
+        if language == "en":
+            return [
+                ("origin", "Origin Airport"),
+                ("travel_type", "Flight Type (arrival/departure)"),
+                ("travel_date", "Travel Date (YYYY-MM-DD)"),
+                ("flight_number", "Flight Number"),
+                ("num_passengers", "Number of Passengers"),
+                ("contact_phone", "Contact Phone Number"),
+                # Passenger details are handled by the model but we keep a marker
+                ("passenger_info", "Passenger details for all passengers"),
+                ("additional_info", "Additional Information (optional)"),
+            ]
+        # Farsi labels
+        return [
+            ("origin", "فرودگاه مبدأ"),
+            ("travel_type", "نوع پرواز (ورودی/خروجی)"),
+            ("travel_date", "تاریخ سفر به میلادی (YYYY-MM-DD)"),
+            ("flight_number", "شماره پرواز"),
+            ("num_passengers", "تعداد مسافران"),
+            ("contact_phone", "شماره تماس"),
+            ("passenger_info", "اطلاعات مسافران برای همه مسافران"),
+            ("additional_info", "توضیحات اضافه (اختیاری)"),
+        ]
+
+    def _passenger_fields(self, language: str) -> List[Tuple[str, str]]:
+        """Ordered per-passenger fields (key, label)."""
+        if language == "en":
+            return [
+                ("first_name", "Passenger First Name"),
+                ("last_name", "Passenger Last Name"),
+                ("national_id", "Passenger National ID"),
+                ("passport_number", "Passenger Passport Number"),
+                ("luggage_count", "Passenger Luggage Count"),
+                ("passenger_type", "Passenger Type (adult/infant)"),
+                ("gender", "Passenger Gender"),
+                ("nationality", "Passenger Nationality"),
+            ]
+        return [
+            ("first_name", "نام مسافر"),
+            ("last_name", "نام خانوادگی مسافر"),
+            ("national_id", "کد ملی مسافر"),
+            ("passport_number", "شماره گذرنامه مسافر"),
+            ("luggage_count", "تعداد چمدان مسافر"),
+            ("passenger_type", "نوع مسافر (بزرگسال/نوزاد)"),
+            ("gender", "جنسیت مسافر"),
+            ("nationality", "ملیت مسافر"),
+        ]
+
+    def _get_or_init_state(self, session_id: str, language: str) -> Dict:
+        state = self.booking_states.get(session_id)
+        if not state:
+            state = {
+                "language": language,
+                "completed": set(),  # keys from _ordered_fields
+                "attempts": {},
+                "num_passengers": None,
+                "passengers": [],  # list of dicts with 'completed' set per passenger
+            }
+            self.booking_states[session_id] = state
+        return state
+
+    def _detect_completed_field(self, text: str, language: str) -> Optional[str]:
+        """Naive detector to mark a base field as completed from the user's message."""
+        norm = text.strip()
+        if language != "en":
+            # Basic Persian normalization similar to normalize_chars
+            norm = re.sub("\s+", " ", norm)
+        # Passengers count (e.g., "2 passengers", "3 people", "۳ نفر")
+        if re.search(r"(\d{1,2})\s*(passenger|people|نفر)", norm, re.I):
+            return "num_passengers"
+        # Date YYYY-MM-DD
+        if re.search(r"\b20\d{2}-\d{2}-\d{2}\b", norm):
+            return "travel_date"
+        # Flight number: 2-10 alnum, often letters+digits; accept with or without space/hyphen
+        if re.search(r"\b[A-Za-z]{1,3}\s?-?\d{2,6}\b", norm):
+            return "flight_number"
+        # Phone: 10-15 digits (allow spaces/plus)
+        digits = re.sub(r"\D", "", norm)
+        if len(digits) >= 10 and len(digits) <= 15:
+            # Heuristic: if starts with 0 or country code and the message looks like a number
+            if re.fullmatch(r"[+\d\s()-]{10,20}", norm):
+                return "contact_phone"
+        # Travel type
+        if language == "en":
+            if re.search(r"\b(arrival|arriving)\b", norm, re.I):
+                return "travel_type"
+            if re.search(r"\b(departure|departing|leaving)\b", norm, re.I):
+                return "travel_type"
+        else:
+            fa = norm
+            if any(k in fa for k in ["ورودی", "ورود"]):
+                return "travel_type"
+            if any(k in fa for k in ["خروجی", "خروج"]):
+                return "travel_type"
+        # Origin airport (very naive: contains words like Imam, Mashhad, Mehrabad or their FA)
+        if language == "en":
+            if re.search(r"imam|mehrabad|mashhad|airport", norm, re.I):
+                return "origin"
+        else:
+            if any(k in norm for k in ["امام", "مهرآباد", "مشهد", "فرودگاه"]):
+                return "origin"
+        return None
+
+    def _build_state_guidance(self, language: str, state: Dict) -> str:
+        ordered = self._ordered_fields(language)
+        completed = state.get("completed", set())
+        # Compute next required field
+        next_key = None
+        # First, ensure base fields up to passenger_info
+        for key, _ in ordered:
+            if key == "passenger_info":
+                break
+            if key not in completed:
+                next_key = key
+                break
+
+        passenger_fields = self._passenger_fields(language)
+        next_passenger_prompt = None
+        # If base up to passenger_info is satisfied, handle passengers
+        if next_key is None and "num_passengers" in completed:
+            num_passengers = state.get("num_passengers")
+            passengers = state.get("passengers", [])
+            if isinstance(num_passengers, int) and num_passengers > 0:
+                # Ensure passengers list length
+                while len(passengers) < num_passengers:
+                    passengers.append({"completed": set()})
+                state["passengers"] = passengers
+                # Find first passenger with missing field
+                for i in range(num_passengers):
+                    pc = passengers[i].get("completed", set())
+                    for pkey, _ in passenger_fields:
+                        if pkey not in pc:
+                            next_passenger_prompt = (i + 1, pkey)
+                            break
+                    if next_passenger_prompt:
+                        break
+                if not next_passenger_prompt:
+                    # All passenger info done
+                    state["completed"].add("passenger_info")
+            else:
+                next_key = "num_passengers"
+
+        # Checklist text
+        def label_for(key: str) -> str:
+            for k, lbl in ordered:
+                if k == key:
+                    return lbl
+            return key
+
+        items = []
+        for key, lbl in ordered:
+            mark = "[x]" if key in completed else "[ ]"
+            items.append(f"{mark} {lbl}")
+        # Append passenger sub-checklist when count is known
+        if "num_passengers" in completed and isinstance(
+            state.get("num_passengers"), int
+        ):
+            n = state.get("num_passengers") or 0
+            passengers = state.get("passengers", [])
+            for i in range(max(0, n)):
+                items.append("")
+                items.append(
+                    (f"Passenger {i+1}" if language == "en" else f"مسافر {i+1}")
+                )
+                pc = (
+                    passengers[i].get("completed", set())
+                    if i < len(passengers)
+                    else set()
+                )
+                for pkey, plabel in passenger_fields:
+                    pmark = "[x]" if pkey in pc else "[ ]"
+                    items.append(f"  {pmark} {plabel}")
+        checklist_text = "\n".join(items)
+        if language == "en":
+            if next_passenger_prompt:
+                pidx, pkey = next_passenger_prompt
+                plabel = dict(passenger_fields).get(pkey, pkey)
+                next_line = f"Next required field to ask: Passenger {pidx} → {plabel}"
+            else:
+                next_line = (
+                    f"Next required field to ask: {label_for(next_key)}"
+                    if next_key
+                    else "All base fields collected."
+                )
+            header = "# STATE ENFORCEMENT (Do not violate)"
+            rules = (
+                "- Ask strictly ONE question at a time\n"
+                "- Ask ONLY for the next required field shown below\n"
+                "- NEVER repeat an already completed field\n"
+                "- If invalid, retry at most once, then proceed"
+            )
+            return f"{header}\n{rules}\n\nChecklist:\n{checklist_text}\n\n{next_line}"
+        # Farsi
+        if next_passenger_prompt:
+            pidx, pkey = next_passenger_prompt
+            plabel = dict(passenger_fields).get(pkey, pkey)
+            next_line = f"مورد بعدی که باید بپرسی: مسافر {pidx} → {plabel}"
+        else:
+            next_line = (
+                f"مورد بعدی که باید بپرسی: {label_for(next_key)}"
+                if next_key
+                else "همه موارد پایه تکمیل شده‌اند."
+            )
+        header = "# اجرای وضعیت (لطفاً نقض نکن)"
+        rules = (
+            "- در هر نوبت فقط یک سوال بپرس\n"
+            "- فقط و فقط مورد بعدی را بپرس\n"
+            "- موارد تکمیل‌شده را هرگز تکرار نکن\n"
+            "- در صورت نامعتبر بودن حداکثر یک‌بار تکرار کن، سپس جلو برو"
+        )
+        return f"{header}\n{rules}\n\nچک‌لیست:\n{checklist_text}\n\n{next_line}"
 
     def get_assistant_response(
         self, user_message: str, session_id: Optional[str] = None, language: str = "fa"
@@ -164,6 +382,23 @@ class OpenAIService:
             if selected_location:
                 break
 
+        # Update booking state and build dynamic guidance
+        state = self._get_or_init_state(session_id, language)
+        detected = self._detect_completed_field(user_message, language)
+        if detected:
+            if detected == "num_passengers":
+                m = re.search(r"(\d{1,2})\s*(passenger|people|نفر)", user_message, re.I)
+                if m:
+                    try:
+                        count = int(m.group(1))
+                        state["num_passengers"] = count
+                        state["completed"].add("num_passengers")
+                    except Exception:
+                        pass
+            else:
+                state["completed"].add(detected)
+        state_guidance = self._build_state_guidance(language, state)
+
         # Create intelligent system prompt that lets AI handle everything
         if language == "en":
             system_prompt = f"""
@@ -245,6 +480,9 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
 - Include safety tips, local etiquette, and accessibility notes when relevant
 - Offer 1–3 alternative options per recommendation and practical next steps
 - Answer in the user’s current language
+
+# Booking Flow State:
+{state_guidance}
 
 # Knowledge Base:
 {knowledge_base}
@@ -330,6 +568,9 @@ If the user asks about city/country attractions, culture, itineraries, food, tra
 - در صورت لزوم نکات ایمنی، آداب محلی و دسترسی‌پذیری را ذکر کن
 - برای هر پیشنهاد ۱ تا ۳ گزینه جایگزین و قدم‌های بعدی عملی ارائه بده
 - به زبان فعلی کاربر پاسخ بده
+
+# وضعیت جریان رزرو:
+{state_guidance}
 
 # دانش‌نامه:
 {knowledge_base}
